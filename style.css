@@ -1,0 +1,115 @@
+:root {
+    --bg-color: #1a1a2e;
+    --primary-text: #e0e0e0;
+    --hud-bg: rgba(0, 0, 0, 0.5);
+    --btn-bg: rgba(255, 255, 255, 0.2);
+    --btn-active-bg: rgba(255, 255, 255, 0.4);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    color: var(--primary-text);
+    font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+}
+
+.game-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+canvas {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    aspect-ratio: 16 / 9;
+    background-color: #000;
+}
+
+#hud {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background-color: var(--hud-bg);
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 14px;
+    text-align: right;
+    pointer-events: none;
+}
+
+.overlay-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--hud-bg);
+    padding: 20px;
+    border: 1px solid var(--primary-text);
+    border-radius: 8px;
+    z-index: 100;
+    text-align: center;
+}
+
+.overlay-panel.hidden {
+    display: none;
+}
+
+#mobile-controls {
+    position: fixed;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 120px;
+    display: none; /* Hidden by default */
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    pointer-events: none;
+}
+
+.mobile-left, .mobile-right {
+    display: flex;
+    gap: 15px;
+}
+
+.mobile-btn {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 2px solid var(--primary-text);
+    background-color: var(--btn-bg);
+    color: var(--primary-text);
+    font-size: 24px;
+    font-weight: bold;
+    user-select: none;
+    -webkit-user-select: none; /* For Safari */
+    -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
+    pointer-events: all;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.mobile-btn:active {
+    background-color: var(--btn-active-bg);
+}
+
+/* Show mobile controls only on touch devices or small screens */
+@media (hover: none) and (pointer: coarse), (max-width: 768px) {
+    #mobile-controls {
+        display: flex;
+    }
+}

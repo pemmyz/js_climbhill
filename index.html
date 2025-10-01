@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Planck Racer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚙</text></svg>">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="game-container">
+        <canvas id="game-canvas"></canvas>
+    </main>
+
+    <div id="hud">
+        <div class="hud-item">Speed: <span id="speed-value">0</span> km/h</div>
+        <div class="hud-item">RPM: <span id="rpm-value">0</span></div>
+        <div class="hud-item">Fuel: <span id="fuel-value">100</span>%</div>
+        <div class="hud-item">Distance: <span id="distance-value">0</span> m</div>
+        <div class="hud-item">Slope: <span id="slope-value">0</span>%</div>
+    </div>
+
+    <div id="help-panel" class="overlay-panel hidden">
+        <h3>Controls</h3>
+        <p><b>Up/Down:</b> Throttle/Brake</p>
+        <p><b>Left/Right:</b> Pitch in air</p>
+        <p><b>R:</b> Reset to checkpoint</p>
+        <p><b>Space:</b> Pause/Resume</p>
+        <p><b>G:</b> Toggle Front-Wheel Drive</p>
+        <p><b>H:</b> Toggle Help</p>
+        <p><b>D:</b> Toggle Debug View</p>
+        <p><b>Gamepad:</b> RT/LT for gas/brake, Left Stick for pitch.</p>
+    </div>
+    
+    <div id="mobile-controls">
+        <div class="mobile-left">
+            <button id="tilt-backward-btn" class="mobile-btn">◄</button>
+            <button id="tilt-forward-btn" class="mobile-btn">►</button>
+        </div>
+        <div class="mobile-right">
+            <button id="brake-btn" class="mobile-btn">Brake</button>
+            <button id="throttle-btn" class="mobile-btn">Gas</button>
+        </div>
+    </div>
+
+    <div id="dev-overlay" class="overlay-panel hidden">
+        <h3>Dev Tools</h3>
+        <!-- Dev controls can be added here -->
+    </div>
+
+    <div id="game-over-panel" class="overlay-panel hidden">
+        <h2>GAME OVER</h2>
+        <p>Out of fuel!</p>
+        <p>Press 'R' to restart from last checkpoint.</p>
+    </div>
+
+    <!-- Planck.js CDN -->
+    <script src="planck.min.js"></script>
+    <!-- Main Game Script -->
+    <script src="script.js"></script>
+</body>
+</html>
