@@ -8,7 +8,7 @@ window.addEventListener('load', () => {
     const PHYSICS_STEP = 1 / 120; // 120 Hz physics simulation
     const MAX_ACCUMULATOR_STEPS = 5;
 
-    // == VEHICLE PARAMETERS (STEP 1: REPLACED) ==
+    // == VEHICLE PARAMETERS ==
     const VEHICLE_PARAMS = {
         CHASSIS_MASS: 180,
 
@@ -71,14 +71,13 @@ window.addEventListener('load', () => {
             if (d1.type === 'chassis' && d2.type === 'checkpoint' && isBeginning) { gameState.lastCheckpoint = { pos: vehicle.chassis.getPosition(), angle: vehicle.chassis.getAngle(), linearVel: vehicle.chassis.getLinearVelocity(), angularVel: vehicle.chassis.getAngularVelocity() }; world.destroyBody(fix2.getBody()); }
             if (d1.type === 'chassis' && d2.type === 'fuel' && isBeginning) { gameState.fuel = Math.min(GAME_PARAMS.FUEL_START, gameState.fuel + 50); world.destroyBody(fix2.getBody()); }
         };
-        // (STEP 5: CORRECTED)
         checkPair(dataA, dataB, contact.getFixtureB()); 
-        checkPair(dataB, dataA, contact.getFixtureA()); // <- Fixed to use fixture A
+        checkPair(dataB, dataA, contact.getFixtureA());
     }
 
     function resizeCanvas() { const dpr = window.devicePixelRatio || 1; const rect = canvas.getBoundingClientRect(); canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; ctx.scale(dpr, dpr); }
     
-    // D. INPUT MANAGER (STEP 3: UNCHANGED AS REQUESTED)
+    // D. INPUT MANAGER
     const input = {
         throttle: 0, brake: 0, pitch: 0, keys: new Set(),
         init() {
@@ -115,7 +114,7 @@ window.addEventListener('load', () => {
     }
     function createCollectible(pos, type) { const body = world.createBody({ type: 'static', position: pos }); body.createFixture(pl.Box(0.5, 0.5), { isSensor: true, userData: { type: type } }); body.renderData = { type }; }
 
-    // F. VEHICLE FACTORY (STEP 2: REPLACED)
+    // F. VEHICLE FACTORY
     function createVehicle(world, pos) {
         const {
             CHASSIS_MASS, REAR_BAR_DIM, FRONT_BAR_DIM, FRONT_BAR_OFFSET,
@@ -127,16 +126,13 @@ window.addEventListener('load', () => {
 
         const pl = planck, Vec2 = pl.Vec2;
 
-        // --- Chassis ---
         const chassis = world.createDynamicBody({ position: pos, angularDamping: 0.1 });
         const density = CHASSIS_MASS / ((REAR_BAR_DIM.w * REAR_BAR_DIM.h) + (FRONT_BAR_DIM.w * FRONT_BAR_DIM.h));
         const chassisFixtureDef = { density, filterGroupIndex: -1 };
-
         chassis.createFixture(pl.Box(REAR_BAR_DIM.w / 2, REAR_BAR_DIM.h / 2, Vec2(-0.2, 0)), chassisFixtureDef);
         chassis.createFixture(pl.Box(FRONT_BAR_DIM.w / 2, FRONT_BAR_DIM.h / 2, Vec2(FRONT_BAR_OFFSET.x, FRONT_BAR_OFFSET.y)), chassisFixtureDef);
         chassis.setUserData({ type: 'chassis' });
 
-        // --- Wheels ---
         const wheelFixtureDef = {
             density: WHEEL_MASS / (Math.PI * WHEEL_RADIUS * WHEEL_RADIUS),
             friction: WHEEL_FRICTION,
@@ -151,28 +147,23 @@ window.addEventListener('load', () => {
             const wheel = world.createDynamicBody({
             position: chassis.getWorldPoint(anchorLocal),
             bullet: true,
-            angularDamping: 0.05   // keeps rotation sane
+            angularDamping: 0.05
             });
             const fix = wheel.createFixture(pl.Circle(WHEEL_RADIUS), {
             ...wheelFixtureDef,
             userData: { type: 'wheel', wheelId, owner: null }
             });
 
-            // Proper suspension with WheelJoint (prismatic + spring + motor support)
-            const axis = chassis.getWorldVector(Vec2(0, 1)); // vertical suspension axis in chassis frame
+            const axis = chassis.getWorldVector(Vec2(0, 1));
             const j = world.createJoint(pl.WheelJoint({
             motorSpeed: 0,
             maxMotorTorque: 0,
             enableMotor: false,
-
             frequencyHz: SUSPENSION_FREQ_HZ,
             dampingRatio: SUSPENSION_DAMPING_RATIO,
-
-            // Soft travel limits using translation limits; we clamp with limits.
             enableLimit: true,
             lowerTranslation: -SUSPENSION_TRAVEL,
             upperTranslation:  SUSPENSION_TRAVEL,
-
             }, chassis, wheel, chassis.getWorldPoint(anchorLocal), axis));
 
             return { wheel, joint: j };
@@ -202,8 +193,6 @@ window.addEventListener('load', () => {
             this.chassis.setAngle(angle);
             this.chassis.setLinearVelocity(linearVel || Vec2.zero());
             this.chassis.setAngularVelocity(angularVel || 0);
-
-            // Re-seat wheels under chassis
             this.rearWheel.setPosition(chassis.getWorldPoint(rearWheelAnchorLocal));
             this.frontWheel.setPosition(chassis.getWorldPoint(frontWheelAnchorLocal));
             this.rearWheel.setLinearVelocity(linearVel || Vec2.zero());
@@ -212,15 +201,12 @@ window.addEventListener('load', () => {
             this.frontWheel.setAngularVelocity(0);
             },
 
-            // (STEP 4: OLD SUSPENSION LOGIC IS GONE)
             update(dt, input) {
-            // --- 1) DRIVE: rear wheel motor spins wheel around its axle to propel car ---
             if (input.throttle > 0) {
                 this.rearJoint.enableMotor(true);
                 this.rearJoint.setMotorSpeed(-input.throttle * VEHICLE_PARAMS.MOTOR_MAX_SPEED);
                 this.rearJoint.setMaxMotorTorque(VEHICLE_PARAMS.MOTOR_TORQUE);
             } else {
-                // No throttle -> disable motor; apply gentle engine braking if grounded
                 this.rearJoint.enableMotor(false);
                 const rearOmega = this.rearWheel.getAngularVelocity();
                 if (this.isRearGrounded) {
@@ -229,7 +215,6 @@ window.addEventListener('load', () => {
                 }
             }
 
-            // --- 2) BRAKE: strong opposing torque when pressing brake ---
             if (input.brake > 0) {
                 const rearOmega  = this.rearWheel.getAngularVelocity();
                 const frontOmega = this.frontWheel.getAngularVelocity();
@@ -239,14 +224,11 @@ window.addEventListener('load', () => {
                 this.frontWheel.applyTorque(frontOppose, true);
             }
 
-            // --- 3) CHASSIS SPIN CONTROL (Left/Right) ---
             let totalRotationalTorque = 0;
             const playerTorque = -input.pitch * VEHICLE_PARAMS.AIR_CONTROL_TORQUE;
             totalRotationalTorque += playerTorque;
-
             const currentOmega = this.chassis.getAngularVelocity();
             totalRotationalTorque -= currentOmega * VEHICLE_PARAMS.AIR_CONTROL_DAMPING;
-
             this.chassis.applyTorque(totalRotationalTorque, true);
             this.totalAppliedTorque = totalRotationalTorque;
             }
@@ -267,6 +249,7 @@ window.addEventListener('load', () => {
 
     // I. UI / HUD
     const hud = {
+        element: document.getElementById('hud'), // [NEW] Cache the parent HUD element
         speed: document.getElementById('speed-value'),
         rpm: document.getElementById('rpm-value'),
         fuel: document.getElementById('fuel-value'),
@@ -291,6 +274,13 @@ window.addEventListener('load', () => {
             this.torque.textContent = vehicle.totalAppliedTorque.toFixed(0);
             
             if(gameState.gameOver) this.gameOverPanel.classList.remove('hidden');
+
+            // [NEW] Add visual indicator for debug/dev mode
+            if (gameState.debug) {
+                this.element.style.backgroundColor = 'rgba(80, 20, 20, 0.7)'; // Reddish dev mode indicator
+            } else {
+                this.element.style.backgroundColor = ''; // Revert to CSS default style
+            }
         }
     };
     
@@ -299,7 +289,46 @@ window.addEventListener('load', () => {
 
     // K. MAIN GAME LOOP
     let lastTime = 0, accumulator = 0;
-    function gameLoop(currentTime) { requestAnimationFrame(gameLoop); const dt = (currentTime - lastTime) / 1000; lastTime = currentTime; if (gameState.paused || !world) return; input.update(); if (!gameState.gameOver) { gameState.fuel -= (GAME_PARAMS.FUEL_DRAIN_RATE + input.throttle * GAME_PARAMS.FUEL_DRAIN_THROTTLE_MULTIPLIER) * dt; if (gameState.fuel <= 0) { gameState.fuel = 0; if (vehicle.chassis.getLinearVelocity().length() < 0.1) gameState.gameOver = true; } } accumulator += dt; let steps = 0; while (accumulator >= PHYSICS_STEP && steps < MAX_ACCUMULATOR_STEPS) { vehicle.update(PHYSICS_STEP, input); world.step(PHYSICS_STEP); world.clearForces(); accumulator -= PHYSICS_STEP; steps++; } camera.update(dt, vehicle.chassis); terrainManager.update(camera.x); if (vehicle.chassis.getPosition().y < -50) input.handleReset(); render(); hud.update(); }
+    function gameLoop(currentTime) {
+        requestAnimationFrame(gameLoop);
+        const dt = (currentTime - lastTime) / 1000;
+        lastTime = currentTime;
+        if (gameState.paused || !world) return;
+        
+        input.update();
+
+        // [NEW] Handle fuel logic with dev mode check
+        if (!gameState.gameOver) {
+            if (!gameState.debug) {
+                // Normal mode: drain fuel
+                gameState.fuel -= (GAME_PARAMS.FUEL_DRAIN_RATE + input.throttle * GAME_PARAMS.FUEL_DRAIN_THROTTLE_MULTIPLIER) * dt;
+                if (gameState.fuel <= 0) {
+                    gameState.fuel = 0;
+                    if (vehicle.chassis.getLinearVelocity().length() < 0.1) gameState.gameOver = true;
+                }
+            } else {
+                // Dev mode: unlimited fuel
+                gameState.fuel = GAME_PARAMS.FUEL_START;
+            }
+        }
+        
+        accumulator += dt;
+        let steps = 0;
+        while (accumulator >= PHYSICS_STEP && steps < MAX_ACCUMULATOR_STEPS) {
+            vehicle.update(PHYSICS_STEP, input);
+            world.step(PHYSICS_STEP);
+            world.clearForces();
+            accumulator -= PHYSICS_STEP;
+            steps++;
+        }
+        
+        camera.update(dt, vehicle.chassis);
+        terrainManager.update(camera.x);
+        if (vehicle.chassis.getPosition().y < -50) input.handleReset();
+        
+        render();
+        hud.update();
+    }
 
     // L. INITIALIZATION
     function init() {
