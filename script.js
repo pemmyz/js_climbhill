@@ -87,7 +87,27 @@ window.addEventListener('load', () => {
             setupMobileBtn('throttle-btn', v => this.throttle = v); setupMobileBtn('brake-btn', v => this.brake = v); setupMobileBtn('tilt-forward-btn', v => this.pitch = v); setupMobileBtn('tilt-backward-btn', v => this.pitch = -v);
         },
         update() { this.throttle = this.keys.has('ArrowUp') ? 1 : 0; this.brake = this.keys.has('ArrowDown') ? 1 : 0; this.pitch = (this.keys.has('ArrowRight') ? 1 : 0) - (this.keys.has('ArrowLeft') ? 1 : 0); const gp = navigator.getGamepads ? navigator.getGamepads()[0] : null; if (gp) { this.throttle = Math.max(this.throttle, gp.buttons[7].value); this.brake = Math.max(this.brake, gp.buttons[6].value); if (Math.abs(gp.axes[0]) > 0.15) this.pitch = gp.axes[0]; if (gp.buttons[9].pressed) gameState.paused = !gameState.paused; } },
-        handleReset() { if (gameState.lastCheckpoint) { vehicle.reset(gameState.lastCheckpoint.pos, gameState.lastCheckpoint.angle, gameState.lastCheckpoint.linearVel, gameState.lastCheckpoint.angularVel); gameState.fuel = Math.max(25, gameState.fuel); } else { vehicle.reset(Vec2(4, 5), 0, Vec2.zero(), 0); gameState.fuel = GAME_PARAMS.FUEL_START; } gameState.gameOver = false; document.getElementById('game-over-panel').classList.add('hidden'); }
+        
+        // [MODIFIED] handleReset now spawns the car in the air for checkpoints.
+        handleReset() {
+            if (gameState.lastCheckpoint) {
+                // Create a new spawn position with a vertical offset to prevent getting stuck
+                const checkpointPos = gameState.lastCheckpoint.pos;
+                const yOffset = 5 * VEHICLE_PARAMS.WHEEL_RADIUS; // 5 wheel heights
+                const spawnPos = Vec2(checkpointPos.x, checkpointPos.y + yOffset);
+
+                // Reset the car at the new elevated position.
+                // Also reset angle and velocities to zero for a clean, predictable drop.
+                vehicle.reset(spawnPos, 0, Vec2.zero(), 0);
+                gameState.fuel = Math.max(25, gameState.fuel);
+            } else {
+                // Initial spawn, which is already high enough
+                vehicle.reset(Vec2(4, 5), 0, Vec2.zero(), 0);
+                gameState.fuel = GAME_PARAMS.FUEL_START;
+            }
+            gameState.gameOver = false;
+            document.getElementById('game-over-panel').classList.add('hidden');
+        }
     };
 
     // E. TERRAIN MANAGER
@@ -249,7 +269,7 @@ window.addEventListener('load', () => {
 
     // I. UI / HUD
     const hud = {
-        element: document.getElementById('hud'), // [NEW] Cache the parent HUD element
+        element: document.getElementById('hud'),
         speed: document.getElementById('speed-value'),
         rpm: document.getElementById('rpm-value'),
         fuel: document.getElementById('fuel-value'),
@@ -275,11 +295,10 @@ window.addEventListener('load', () => {
             
             if(gameState.gameOver) this.gameOverPanel.classList.remove('hidden');
 
-            // [NEW] Add visual indicator for debug/dev mode
             if (gameState.debug) {
-                this.element.style.backgroundColor = 'rgba(80, 20, 20, 0.7)'; // Reddish dev mode indicator
+                this.element.style.backgroundColor = 'rgba(80, 20, 20, 0.7)';
             } else {
-                this.element.style.backgroundColor = ''; // Revert to CSS default style
+                this.element.style.backgroundColor = '';
             }
         }
     };
@@ -297,17 +316,14 @@ window.addEventListener('load', () => {
         
         input.update();
 
-        // [NEW] Handle fuel logic with dev mode check
         if (!gameState.gameOver) {
             if (!gameState.debug) {
-                // Normal mode: drain fuel
                 gameState.fuel -= (GAME_PARAMS.FUEL_DRAIN_RATE + input.throttle * GAME_PARAMS.FUEL_DRAIN_THROTTLE_MULTIPLIER) * dt;
                 if (gameState.fuel <= 0) {
                     gameState.fuel = 0;
                     if (vehicle.chassis.getLinearVelocity().length() < 0.1) gameState.gameOver = true;
                 }
             } else {
-                // Dev mode: unlimited fuel
                 gameState.fuel = GAME_PARAMS.FUEL_START;
             }
         }
