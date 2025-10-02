@@ -8,34 +8,35 @@ window.addEventListener('load', () => {
     const PHYSICS_STEP = 1 / 120; // 120 Hz physics simulation
     const MAX_ACCUMULATOR_STEPS = 5;
 
-    // == VEHICLE PARAMETERS (ADJUSTED FOR STABILITY AND FEEL) ==
+    // == VEHICLE PARAMETERS (STEP 1: REPLACED) ==
     const VEHICLE_PARAMS = {
-        CHASSIS_MASS: 120, // kg
+        CHASSIS_MASS: 180,
+
         REAR_BAR_DIM: { w: 1.2, h: 0.25 },
         FRONT_BAR_DIM: { w: 0.8, h: 0.25 },
         FRONT_BAR_OFFSET: { x: 0.8, y: -0.05 },
-        WHEEL_MASS: 12, // kg
-        WHEEL_RADIUS: 0.35, // m
-        WHEEL_FRICTION: 1.5,
-        WHEEL_RESTITUTION: 0.1,
-        TRACK_WIDTH: 1.5,
-        
-        SUSPENSION_FREQ_HZ: 4.0, 
-        SUSPENSION_DAMPING_RATIO: 1.2,
-        SUSPENSION_TRAVEL: 0.20,
-        MAX_SPRING_FORCE: 50000, 
 
-        MOTOR_TORQUE: 550, // N·m
-        MOTOR_MAX_SPEED: 55, // rad/s
-        BRAKE_TORQUE: 1200, // N·m
-        ENGINE_BRAKE_TORQUE: 50, // N·m
-        
-        // [FIX] Increased air control torque for faster spinning
-        AIR_CONTROL_TORQUE: 300, // N·m
-        AIR_CONTROL_DAMPING: 80,
-        
-        SELF_RIGHTING_TORQUE: 400,
-        AERIAL_STABILITY_TORQUE: 50,
+        WHEEL_MASS: 12,
+        WHEEL_RADIUS: 0.35,
+        WHEEL_FRICTION: 1.6,
+        WHEEL_RESTITUTION: 0.05,
+        TRACK_WIDTH: 1.5,
+
+        // Softer, slightly bouncy suspension
+        SUSPENSION_FREQ_HZ: 2.0,          // lower = softer
+        SUSPENSION_DAMPING_RATIO: 0.45,   // < 0.5 = a bit of bounce
+        SUSPENSION_TRAVEL: 0.35,
+        MAX_SPRING_FORCE: 80000,
+
+        // Wheel motor & brakes
+        MOTOR_TORQUE: 900,            // Nm (how hard the motor can push)
+        MOTOR_MAX_SPEED: 70,          // rad/s (cap for wheel motor speed)
+        BRAKE_TORQUE: 1800,           // Nm (hard brakes)
+        ENGINE_BRAKE_TORQUE: 70,      // Nm (drag when coasting)
+
+        // Spin the whole car on its axis (Left/Right)
+        AIR_CONTROL_TORQUE: 1800,     // stronger spin
+        AIR_CONTROL_DAMPING: 30
     };
 
     const TERRAIN_PARAMS = { SEGMENT_LENGTH: 100, SAMPLE_DISTANCE: 0.8, MAX_SLOPE: 0.8, GENERATION_THRESHOLD: 200, CULLING_THRESHOLD: 150, FRICTION: 0.9, RESTITUTION: 0.0, A1: 0.8, F1: 0.4, P1: 0, A2: 0.3, F2: 1.2, P2: 0, };
@@ -70,12 +71,14 @@ window.addEventListener('load', () => {
             if (d1.type === 'chassis' && d2.type === 'checkpoint' && isBeginning) { gameState.lastCheckpoint = { pos: vehicle.chassis.getPosition(), angle: vehicle.chassis.getAngle(), linearVel: vehicle.chassis.getLinearVelocity(), angularVel: vehicle.chassis.getAngularVelocity() }; world.destroyBody(fix2.getBody()); }
             if (d1.type === 'chassis' && d2.type === 'fuel' && isBeginning) { gameState.fuel = Math.min(GAME_PARAMS.FUEL_START, gameState.fuel + 50); world.destroyBody(fix2.getBody()); }
         };
-        checkPair(dataA, dataB, contact.getFixtureB()); checkPair(dataB, dataA, contact.getFixtureB());
+        // (STEP 5: CORRECTED)
+        checkPair(dataA, dataB, contact.getFixtureB()); 
+        checkPair(dataB, dataA, contact.getFixtureA()); // <- Fixed to use fixture A
     }
 
     function resizeCanvas() { const dpr = window.devicePixelRatio || 1; const rect = canvas.getBoundingClientRect(); canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; ctx.scale(dpr, dpr); }
     
-    // D. INPUT MANAGER
+    // D. INPUT MANAGER (STEP 3: UNCHANGED AS REQUESTED)
     const input = {
         throttle: 0, brake: 0, pitch: 0, keys: new Set(),
         init() {
@@ -112,93 +115,147 @@ window.addEventListener('load', () => {
     }
     function createCollectible(pos, type) { const body = world.createBody({ type: 'static', position: pos }); body.createFixture(pl.Box(0.5, 0.5), { isSensor: true, userData: { type: type } }); body.renderData = { type }; }
 
-    // F. VEHICLE FACTORY
+    // F. VEHICLE FACTORY (STEP 2: REPLACED)
     function createVehicle(world, pos) {
-        const { CHASSIS_MASS, REAR_BAR_DIM, FRONT_BAR_DIM, FRONT_BAR_OFFSET, WHEEL_MASS, WHEEL_RADIUS, TRACK_WIDTH, WHEEL_FRICTION } = VEHICLE_PARAMS;
+        const {
+            CHASSIS_MASS, REAR_BAR_DIM, FRONT_BAR_DIM, FRONT_BAR_OFFSET,
+            WHEEL_MASS, WHEEL_RADIUS, TRACK_WIDTH,
+            WHEEL_FRICTION, WHEEL_RESTITUTION,
+            SUSPENSION_FREQ_HZ, SUSPENSION_DAMPING_RATIO, SUSPENSION_TRAVEL,
+            MOTOR_TORQUE, MOTOR_MAX_SPEED, BRAKE_TORQUE, ENGINE_BRAKE_TORQUE
+        } = VEHICLE_PARAMS;
 
+        const pl = planck, Vec2 = pl.Vec2;
+
+        // --- Chassis ---
         const chassis = world.createDynamicBody({ position: pos, angularDamping: 0.1 });
         const density = CHASSIS_MASS / ((REAR_BAR_DIM.w * REAR_BAR_DIM.h) + (FRONT_BAR_DIM.w * FRONT_BAR_DIM.h));
         const chassisFixtureDef = { density, filterGroupIndex: -1 };
+
         chassis.createFixture(pl.Box(REAR_BAR_DIM.w / 2, REAR_BAR_DIM.h / 2, Vec2(-0.2, 0)), chassisFixtureDef);
         chassis.createFixture(pl.Box(FRONT_BAR_DIM.w / 2, FRONT_BAR_DIM.h / 2, Vec2(FRONT_BAR_OFFSET.x, FRONT_BAR_OFFSET.y)), chassisFixtureDef);
         chassis.setUserData({ type: 'chassis' });
 
-        const wheelFixtureDef = { density: WHEEL_MASS / (Math.PI * WHEEL_RADIUS * WHEEL_RADIUS), friction: WHEEL_FRICTION, restitution: VEHICLE_PARAMS.WHEEL_RESTITUTION, filterGroupIndex: -1, };
-        
-        const rearWheelAnchor = Vec2(-TRACK_WIDTH / 2, -1.0); const frontWheelAnchor = Vec2(TRACK_WIDTH / 2, -1.0);
-
-        const createWheelAssembly = (wheelId, localAnchorOnChassis) => {
-            const worldPos = chassis.getWorldPoint(localAnchorOnChassis); const wheel = world.createDynamicBody({ position: worldPos, bullet: true }); wheel.createFixture(pl.Circle(WHEEL_RADIUS), { ...wheelFixtureDef, userData: { type: 'wheel', wheelId: wheelId, owner: null } }); const suspension = world.createJoint(pl.PrismaticJoint({ localAnchorA: localAnchorOnChassis, localAnchorB: Vec2.zero(), localAxisA: Vec2(0, 1), enableLimit: true, lowerTranslation: -VEHICLE_PARAMS.SUSPension_TRAVEL, upperTranslation: VEHICLE_PARAMS.SUSPENSION_TRAVEL, }, chassis, wheel)); return { wheel, suspension };
+        // --- Wheels ---
+        const wheelFixtureDef = {
+            density: WHEEL_MASS / (Math.PI * WHEEL_RADIUS * WHEEL_RADIUS),
+            friction: WHEEL_FRICTION,
+            restitution: WHEEL_RESTITUTION,
+            filterGroupIndex: -1
         };
 
-        const rearAssembly = createWheelAssembly('rear', rearWheelAnchor); const frontAssembly = createWheelAssembly('front', frontWheelAnchor);
+        const rearWheelAnchorLocal  = Vec2(-TRACK_WIDTH / 2, -1.0);
+        const frontWheelAnchorLocal = Vec2( TRACK_WIDTH / 2, -1.0);
+
+        function makeWheel(wheelId, anchorLocal) {
+            const wheel = world.createDynamicBody({
+            position: chassis.getWorldPoint(anchorLocal),
+            bullet: true,
+            angularDamping: 0.05   // keeps rotation sane
+            });
+            const fix = wheel.createFixture(pl.Circle(WHEEL_RADIUS), {
+            ...wheelFixtureDef,
+            userData: { type: 'wheel', wheelId, owner: null }
+            });
+
+            // Proper suspension with WheelJoint (prismatic + spring + motor support)
+            const axis = chassis.getWorldVector(Vec2(0, 1)); // vertical suspension axis in chassis frame
+            const j = world.createJoint(pl.WheelJoint({
+            motorSpeed: 0,
+            maxMotorTorque: 0,
+            enableMotor: false,
+
+            frequencyHz: SUSPENSION_FREQ_HZ,
+            dampingRatio: SUSPENSION_DAMPING_RATIO,
+
+            // Soft travel limits using translation limits; we clamp with limits.
+            enableLimit: true,
+            lowerTranslation: -SUSPENSION_TRAVEL,
+            upperTranslation:  SUSPENSION_TRAVEL,
+
+            }, chassis, wheel, chassis.getWorldPoint(anchorLocal), axis));
+
+            return { wheel, joint: j };
+        }
+
+        const rear  = makeWheel('rear',  rearWheelAnchorLocal);
+        const front = makeWheel('front', frontWheelAnchorLocal);
 
         const vehicleObj = {
-            chassis, rearWheel: rearAssembly.wheel, frontWheel: frontAssembly.wheel,
-            rearSuspension: rearAssembly.suspension, frontSuspension: frontAssembly.suspension,
+            chassis,
+            rearWheel: rear.wheel,
+            frontWheel: front.wheel,
+            rearJoint: rear.joint,
+            frontJoint: front.joint,
             groundContactCount: { rear: 0, front: 0 },
-            airControlTorque: 0,
-            totalAppliedTorque: 0, // [NEW] For HUD display
-            
-            get isRearGrounded() { return this.groundContactCount.rear > 0; },
+            totalAppliedTorque: 0,
+
+            get isRearGrounded()  { return this.groundContactCount.rear  > 0; },
             get isFrontGrounded() { return this.groundContactCount.front > 0; },
 
-            setGrounded(wheelId, isGrounded) { this.groundContactCount[wheelId] += isGrounded ? 1 : -1; },
-
-            reset(pos, angle, linearVel, angularVel) {
-                this.chassis.setPosition(pos); this.chassis.setAngle(angle); this.chassis.setLinearVelocity(linearVel || Vec2.zero()); this.chassis.setAngularVelocity(angularVel || 0); this.rearWheel.setPosition(chassis.getWorldPoint(rearWheelAnchor)); this.frontWheel.setPosition(chassis.getWorldPoint(frontWheelAnchor)); this.rearWheel.setLinearVelocity(linearVel || Vec2.zero()); this.frontWheel.setLinearVelocity(linearVel || Vec2.zero()); this.rearWheel.setAngularVelocity(0); this.frontWheel.setAngularVelocity(0);
+            setGrounded(wheelId, isGrounded) {
+            this.groundContactCount[wheelId] += isGrounded ? 1 : -1;
             },
 
+            reset(pos, angle, linearVel, angularVel) {
+            this.chassis.setPosition(pos);
+            this.chassis.setAngle(angle);
+            this.chassis.setLinearVelocity(linearVel || Vec2.zero());
+            this.chassis.setAngularVelocity(angularVel || 0);
+
+            // Re-seat wheels under chassis
+            this.rearWheel.setPosition(chassis.getWorldPoint(rearWheelAnchorLocal));
+            this.frontWheel.setPosition(chassis.getWorldPoint(frontWheelAnchorLocal));
+            this.rearWheel.setLinearVelocity(linearVel || Vec2.zero());
+            this.frontWheel.setLinearVelocity(linearVel || Vec2.zero());
+            this.rearWheel.setAngularVelocity(0);
+            this.frontWheel.setAngularVelocity(0);
+            },
+
+            // (STEP 4: OLD SUSPENSION LOGIC IS GONE)
             update(dt, input) {
-                
-                // --- 1. SUSPENSION PHYSICS ---
-                const updateSuspension = (suspensionJoint, wheel) => {
-                    const { SUSPENSION_FREQ_HZ, SUSPENSION_DAMPING_RATIO, MAX_SPRING_FORCE, CHASSIS_MASS, WHEEL_MASS } = VEHICLE_PARAMS; const m_eff = (CHASSIS_MASS / 2) + WHEEL_MASS; const omega = 2 * Math.PI * SUSPENSION_FREQ_HZ; const k = omega * omega * m_eff; const c = 2 * SUSPENSION_DAMPING_RATIO * omega * m_eff; const x = suspensionJoint.getJointTranslation(); const v = suspensionJoint.getJointSpeed(); let forceMag = -k * x - c * v; forceMag = clamp(forceMag, -MAX_SPRING_FORCE, MAX_SPRING_FORCE); const axis = this.chassis.getWorldVector(Vec2(0, 1)); const force = axis.mul(forceMag); const wheelPos = wheel.getPosition(); wheel.applyForce(force, wheelPos, true); this.chassis.applyForce(force.mul(-1), this.chassis.getWorldPoint(suspensionJoint.m_localAnchorA), true);
-                };
-                updateSuspension(this.rearSuspension, this.rearWheel); updateSuspension(this.frontSuspension, this.frontWheel);
-
-                // --- 2. ENGINE AND BRAKING PHYSICS ---
-                const { MOTOR_TORQUE, MOTOR_MAX_SPEED, BRAKE_TORQUE, ENGINE_BRAKE_TORQUE, WHEEL_RADIUS } = VEHICLE_PARAMS;
-                let effectiveMotorTorque = MOTOR_TORQUE; if (this.isRearGrounded && input.throttle > 0) { const omega = this.rearWheel.getAngularVelocity(); const vx = this.chassis.getLinearVelocity().x; const tangentialSpeed = -omega * WHEEL_RADIUS; const slipRatio = (tangentialSpeed - vx) / Math.max(Math.abs(vx), 0.1); effectiveMotorTorque = MOTOR_TORQUE * (1 - 0.3 * clamp(Math.abs(slipRatio), 0, 1)); if (Math.abs(slipRatio) > 0.3) { const wheelPos = this.rearWheel.getPosition(); const particlePos = Vec2(wheelPos.x, wheelPos.y - WHEEL_RADIUS); const particleVel = this.chassis.getLinearVelocity().clone().mul(0.2); particleVel.x -= slipRatio * 1.5; spawnParticle(particlePos, particleVel, 0.7, '150,150,150'); } }
-                let rearTorque = 0; const rearOmega = this.rearWheel.getAngularVelocity(); if (input.brake > 0 && this.isRearGrounded) { rearTorque = clamp(-rearOmega * 100, -BRAKE_TORQUE, BRAKE_TORQUE); } else if (input.throttle > 0) { if (rearOmega > -MOTOR_MAX_SPEED) { rearTorque = -effectiveMotorTorque; } } else if (this.isRearGrounded) { rearTorque = clamp(-rearOmega * 10, -ENGINE_BRAKE_TORQUE, ENGINE_BRAKE_TORQUE); } this.rearWheel.applyTorque(rearTorque, true);
-                let frontTorque = 0; const frontOmega = this.frontWheel.getAngularVelocity(); if (input.brake > 0 && this.isFrontGrounded) { frontTorque = clamp(-frontOmega * 100, -BRAKE_TORQUE, BRAKE_TORQUE); } this.frontWheel.applyTorque(frontTorque, true);
-
-                // --- 3. AERIAL ROTATION & STABILITY (REVISED LOGIC) ---
-                let totalRotationalTorque = 0;
-                const isInAir = !this.isRearGrounded && !this.isFrontGrounded;
-
-                if (isInAir) {
-                    // Part A: Player Input
-                    const { AIR_CONTROL_TORQUE, AIR_CONTROL_DAMPING } = VEHICLE_PARAMS;
-                    const targetTorque = -input.pitch * AIR_CONTROL_TORQUE;
-                    this.airControlTorque = smoothFollow(this.airControlTorque, targetTorque, 5, dt);
-                    totalRotationalTorque += this.airControlTorque;
-                    
-                    // Part B: Damping (slows existing rotation)
-                    const currentOmega = this.chassis.getAngularVelocity();
-                    totalRotationalTorque -= currentOmega * AIR_CONTROL_DAMPING;
-
-                    // Part C: Self-Righting and Stability Assist
-                    const { SELF_RIGHTING_TORQUE, AERIAL_STABILITY_TORQUE } = VEHICLE_PARAMS;
-                    const upVector = this.chassis.getWorldVector(Vec2(0, 1));
-                    const torqueToApply = upVector.y < 0 ? SELF_RIGHTING_TORQUE : AERIAL_STABILITY_TORQUE;
-                    
-                    // [FIX] The scaling factor makes the force stronger the more upside-down the car is.
-                    // (1 - upVector.y) = 0 when upright, 1 on its side, 2 when fully upside down.
-                    const scalingFactor = 1.0 - upVector.y;
-                    
-                    const correctionTorque = -upVector.x * torqueToApply * scalingFactor;
-                    totalRotationalTorque += correctionTorque;
-                } else {
-                    this.airControlTorque = 0;
+            // --- 1) DRIVE: rear wheel motor spins wheel around its axle to propel car ---
+            if (input.throttle > 0) {
+                this.rearJoint.enableMotor(true);
+                this.rearJoint.setMotorSpeed(-input.throttle * VEHICLE_PARAMS.MOTOR_MAX_SPEED);
+                this.rearJoint.setMaxMotorTorque(VEHICLE_PARAMS.MOTOR_TORQUE);
+            } else {
+                // No throttle -> disable motor; apply gentle engine braking if grounded
+                this.rearJoint.enableMotor(false);
+                const rearOmega = this.rearWheel.getAngularVelocity();
+                if (this.isRearGrounded) {
+                const engineDrag = clamp(-rearOmega * 10, -ENGINE_BRAKE_TORQUE, ENGINE_BRAKE_TORQUE);
+                this.rearWheel.applyTorque(engineDrag, true);
                 }
+            }
 
-                // Apply all calculated rotational forces at once
-                this.chassis.applyTorque(totalRotationalTorque, true);
-                this.totalAppliedTorque = totalRotationalTorque; // Store for HUD
+            // --- 2) BRAKE: strong opposing torque when pressing brake ---
+            if (input.brake > 0) {
+                const rearOmega  = this.rearWheel.getAngularVelocity();
+                const frontOmega = this.frontWheel.getAngularVelocity();
+                const rearOppose  = clamp(-rearOmega  * 120, -BRAKE_TORQUE, BRAKE_TORQUE);
+                const frontOppose = clamp(-frontOmega * 120, -BRAKE_TORQUE, BRAKE_TORQUE);
+                this.rearWheel.applyTorque(rearOppose, true);
+                this.frontWheel.applyTorque(frontOppose, true);
+            }
+
+            // --- 3) CHASSIS SPIN CONTROL (Left/Right) ---
+            let totalRotationalTorque = 0;
+            const playerTorque = -input.pitch * VEHICLE_PARAMS.AIR_CONTROL_TORQUE;
+            totalRotationalTorque += playerTorque;
+
+            const currentOmega = this.chassis.getAngularVelocity();
+            totalRotationalTorque -= currentOmega * VEHICLE_PARAMS.AIR_CONTROL_DAMPING;
+
+            this.chassis.applyTorque(totalRotationalTorque, true);
+            this.totalAppliedTorque = totalRotationalTorque;
             }
         };
-        rearAssembly.wheel.getFixtureList().getUserData().owner = vehicleObj; frontAssembly.wheel.getFixtureList().getUserData().owner = vehicleObj; return vehicleObj;
+
+        rear.wheel.getFixtureList().getUserData().owner  = vehicleObj;
+        front.wheel.getFixtureList().getUserData().owner = vehicleObj;
+
+        return vehicleObj;
     }
 
     // G. CAMERA
@@ -216,7 +273,6 @@ window.addEventListener('load', () => {
         distance: document.getElementById('distance-value'),
         slope: document.getElementById('slope-value'),
         gameOverPanel: document.getElementById('game-over-panel'),
-        // [NEW] Get new HUD elements
         angle: document.getElementById('angle-value'),
         torque: document.getElementById('torque-value'),
         update() {
@@ -230,8 +286,6 @@ window.addEventListener('load', () => {
             this.fuel.textContent = gameState.fuel.toFixed(0);
             this.distance.textContent = gameState.distance.toFixed(1);
             this.slope.textContent = (slope * 100).toFixed(0);
-
-            // [NEW] Update new HUD values
             const angleDegrees = (vehicle.chassis.getAngle() * 180 / Math.PI) % 360;
             this.angle.textContent = angleDegrees.toFixed(0);
             this.torque.textContent = vehicle.totalAppliedTorque.toFixed(0);
