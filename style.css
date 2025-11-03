@@ -49,22 +49,44 @@ canvas {
     pointer-events: none;
 }
 
+/* [MODIFIED] Overlay Panel styles for better readability and scrolling */
 .overlay-panel {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     background-color: var(--hud-bg);
-    padding: 20px;
+    padding: 25px;
     border: 1px solid var(--primary-text);
     border-radius: 8px;
     z-index: 100;
-    text-align: center;
+    text-align: left;
+    line-height: 1.6;
+    max-width: min(700px, 90vw);
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 .overlay-panel.hidden {
     display: none;
 }
+
+.overlay-panel h2, .overlay-panel h3 {
+    text-align: center;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+}
+.overlay-panel h2:first-child { margin-top: 0; }
+.overlay-panel ul { list-style-position: inside; padding-left: 10px; }
+.overlay-panel li { margin-bottom: 0.5em; }
+.overlay-panel table { width: 100%; border-collapse: collapse; margin: 1em 0; }
+.overlay-panel th, .overlay-panel td { border: 1px solid var(--primary-text); padding: 8px; text-align: left; }
+.overlay-panel th { background-color: var(--btn-bg); }
+.overlay-panel a { color: #9cf; text-decoration: none; }
+.overlay-panel a:hover { text-decoration: underline; }
+.overlay-panel hr { border: 0; border-top: 1px solid var(--primary-text); margin: 1.5em 0; }
+.overlay-panel button { display: block; margin: 20px auto 0; padding: 10px 20px; font-size: 1em; background: var(--btn-bg); color: var(--primary-text); border: 1px solid var(--primary-text); border-radius: 5px; cursor: pointer; }
+.overlay-panel button:hover { background: var(--btn-active-bg); }
 
 #mobile-controls {
     position: fixed;
@@ -107,9 +129,31 @@ canvas {
     background-color: var(--btn-active-bg);
 }
 
-/* Show mobile controls only on touch devices or small screens */
+/* [NEW] Help toggle button styles */
+#help-toggle-button {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    background-color: var(--hud-bg);
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+    z-index: 50;
+    transition: background-color 0.2s;
+}
+#help-toggle-button:hover {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+
+/* Show mobile controls and hide help button on touch/small screens */
 @media (hover: none) and (pointer: coarse), (max-width: 768px) {
     #mobile-controls {
         display: flex;
+    }
+    #help-toggle-button {
+        display: none; /* Hide button to avoid overlap with mobile controls */
     }
 }

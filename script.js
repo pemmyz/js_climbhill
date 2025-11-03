@@ -81,27 +81,38 @@ window.addEventListener('load', () => {
     const input = {
         throttle: 0, brake: 0, pitch: 0, keys: new Set(),
         init() {
+            const helpPanel = document.getElementById('help-panel');
+            const helpToggleButton = document.getElementById('help-toggle-button');
+            const closeHelpBtn = document.getElementById('close-help-btn');
+            
+            const toggleHelp = () => helpPanel.classList.toggle('hidden');
+
             window.addEventListener('keydown', e => this.keys.add(e.code));
-            window.addEventListener('keyup', e => { this.keys.delete(e.code); if (e.code === 'KeyR') this.handleReset(); if (e.code === 'Space') gameState.paused = !gameState.paused; if (e.code === 'KeyH') document.getElementById('help-panel').classList.toggle('hidden'); if (e.code === 'KeyD') gameState.debug = !gameState.debug; });
+            window.addEventListener('keyup', e => {
+                this.keys.delete(e.code);
+                if (e.code === 'KeyR') this.handleReset();
+                if (e.code === 'Space') gameState.paused = !gameState.paused;
+                if (e.code === 'KeyH') toggleHelp();
+                if (e.code === 'KeyD') gameState.debug = !gameState.debug;
+            });
+
+            // [NEW] Event listeners for help buttons
+            helpToggleButton.addEventListener('click', toggleHelp);
+            closeHelpBtn.addEventListener('click', toggleHelp);
+            
             const setupMobileBtn = (id, action) => { const btn = document.getElementById(id); btn.addEventListener('touchstart', (e) => { e.preventDefault(); action(1); }, { passive: false }); btn.addEventListener('touchend', (e) => { e.preventDefault(); action(0); }, { passive: false }); };
             setupMobileBtn('throttle-btn', v => this.throttle = v); setupMobileBtn('brake-btn', v => this.brake = v); setupMobileBtn('tilt-forward-btn', v => this.pitch = v); setupMobileBtn('tilt-backward-btn', v => this.pitch = -v);
         },
         update() { this.throttle = this.keys.has('ArrowUp') ? 1 : 0; this.brake = this.keys.has('ArrowDown') ? 1 : 0; this.pitch = (this.keys.has('ArrowRight') ? 1 : 0) - (this.keys.has('ArrowLeft') ? 1 : 0); const gp = navigator.getGamepads ? navigator.getGamepads()[0] : null; if (gp) { this.throttle = Math.max(this.throttle, gp.buttons[7].value); this.brake = Math.max(this.brake, gp.buttons[6].value); if (Math.abs(gp.axes[0]) > 0.15) this.pitch = gp.axes[0]; if (gp.buttons[9].pressed) gameState.paused = !gameState.paused; } },
         
-        // [MODIFIED] handleReset now spawns the car in the air for checkpoints.
         handleReset() {
             if (gameState.lastCheckpoint) {
-                // Create a new spawn position with a vertical offset to prevent getting stuck
                 const checkpointPos = gameState.lastCheckpoint.pos;
                 const yOffset = 5 * VEHICLE_PARAMS.WHEEL_RADIUS; // 5 wheel heights
                 const spawnPos = Vec2(checkpointPos.x, checkpointPos.y + yOffset);
-
-                // Reset the car at the new elevated position.
-                // Also reset angle and velocities to zero for a clean, predictable drop.
                 vehicle.reset(spawnPos, 0, Vec2.zero(), 0);
                 gameState.fuel = Math.max(25, gameState.fuel);
             } else {
-                // Initial spawn, which is already high enough
                 vehicle.reset(Vec2(4, 5), 0, Vec2.zero(), 0);
                 gameState.fuel = GAME_PARAMS.FUEL_START;
             }

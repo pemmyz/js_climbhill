@@ -18,21 +18,53 @@
         <div class="hud-item">Fuel: <span id="fuel-value">100</span>%</div>
         <div class="hud-item">Distance: <span id="distance-value">0</span> m</div>
         <div class="hud-item">Slope: <span id="slope-value">0</span>%</div>
-        <!-- [NEW] Added Angle and Torque displays -->
         <div class="hud-item">Angle: <span id="angle-value">0</span>°</div>
         <div class="hud-item">Torque: <span id="torque-value">0</span></div>
     </div>
 
+    <!-- [MODIFIED] Help Panel now contains the full README content -->
     <div id="help-panel" class="overlay-panel hidden">
-        <h3>Controls</h3>
-        <p><b>Up/Down:</b> Throttle/Brake</p>
-        <p><b>Left/Right:</b> Pitch in air</p>
-        <p><b>R:</b> Reset to checkpoint</p>
-        <p><b>Space:</b> Pause/Resume</p>
-        <p><b>G:</b> Toggle Front-Wheel Drive</p>
-        <p><b>H:</b> Toggle Help</p>
-        <p><b>D:</b> Toggle Debug View</p>
-        <p><b>Gamepad:</b> RT/LT for gas/brake, Left Stick for pitch.</p>
+        <h2>🚙 Planck Racer Help</h2>
+        
+        <h3>✨ Features</h3>
+        <ul>
+            <li><b>Planck.js vehicle</b> with springy wheel joints, motor/brake torque, and in‑air pitch control.</li>
+            <li><b>Procedural terrain</b> (sinusoidal blend) with slope limiting, culling & on‑the‑fly generation.</li>
+            <li><b>HUD metrics:</b> Speed (km/h), RPM, Fuel %, Distance (m), Slope %, Angle (°) & Applied Torque.</li>
+            <li><b>Checkpoints & fuel cans</b> automatically placed on peaks.</li>
+            <li><b>Game states:</b> Pause/Resume, Debug overlay, Game Over on fuel depletion.</li>
+            <li><b>Full input support:</b> Keyboard, Gamepad, and Mobile touch controls.</li>
+            <li><b>Stable physics:</b> 120 Hz fixed-step simulation with an accumulator.</li>
+        </ul>
+
+        <h3>🎮 Controls</h3>
+        <table>
+            <thead>
+                <tr><th>Action</th><th>Keyboard</th><th>Gamepad</th><th>Mobile</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Throttle</td><td>↑</td><td>RT (button 7)</td><td><b>Gas</b></td></tr>
+                <tr><td>Brake</td><td>↓</td><td>LT (button 6)</td><td><b>Brake</b></td></tr>
+                <tr><td>Pitch (in air)</td><td>← / →</td><td>Left stick (X)</td><td>◄ / ►</td></tr>
+                <tr><td>Pause/Resume</td><td>Space</td><td>Start (button 9)</td><td>—</td></tr>
+                <tr><td>Reset to Checkpoint</td><td>R</td><td>—</td><td>—</td></tr>
+                <tr><td>Toggle Help</td><td>H</td><td>—</td><td>—</td></tr>
+                <tr><td>Toggle Debug</td><td>D</td><td>—</td><td>—</td></tr>
+            </tbody>
+        </table>
+        <p><b>Tip:</b> In <b>Debug</b> mode, fuel is held at 100% for testing.</p>
+
+        <h3>🧪 Dev/Debug Shortcuts</h3>
+        <ul>
+            <li><b>H</b> — Toggle this Help panel</li>
+            <li><b>D</b> — Toggle Debug visuals (joint anchors, different HUD color)</li>
+            <li><b>Space</b> — Pause/resume the simulation</li>
+            <li><b>R</b> — Reset to the last checkpoint (spawns slightly above ground)</li>
+            <li><b>Out of bounds</b> (falling too far down) auto-resets the car.</li>
+        </ul>
+        <hr>
+        <p>Link to repo: <a href="https://github.com/pemmyz/js_climbhill" target="_blank" rel="noopener noreferrer">https://github.com/pemmyz/js_climbhill</a></p>
+        <button id="close-help-btn">Close</button>
     </div>
     
     <div id="mobile-controls">
@@ -56,6 +88,9 @@
         <p>Out of fuel!</p>
         <p>Press 'R' to restart from last checkpoint.</p>
     </div>
+
+    <!-- [NEW] Help toggle button in the corner -->
+    <div id="help-toggle-button">Press 'H' for Help</div>
 
     <!-- Planck.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/planck@latest/dist/planck.min.js"></script>
