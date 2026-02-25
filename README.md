@@ -7,6 +7,9 @@ Drive across a procedurally generated landscape with springy suspension, fuel pi
 
 > **Tech:** Vanilla JS, Canvas 2D, Planck.js physics at 120 Hz. No build step.
 
+## Screenshots
+![Game 1](screenshots/game_1.png)
+
 ---
 
 ## ✨ Features
