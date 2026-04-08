@@ -1,5 +1,7 @@
 # js_climbhill
 
+### Play it now: https://pemmyz.github.io/js_climbhill/
+
 # 🚙 Planck Racer
 
 A 2D side‑view hill‑climb / rally toy built on **HTML5 Canvas** + **Planck.js (Box2D for JS)**.  
