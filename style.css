@@ -2,7 +2,7 @@
     --bg-color: #1a1a2e;
     --primary-text: #e0e0e0;
     --hud-bg: rgba(0, 0, 0, 0.5);
-    --btn-bg: rgba(255, 255, 255, 0.2);
+    --btn-bg: rgba(255, 255, 255, 0.15);
     --btn-active-bg: rgba(255, 255, 255, 0.4);
 }
 
@@ -13,15 +13,38 @@
 }
 
 html, body {
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
     overflow: hidden;
     background-color: var(--bg-color);
     color: var(--primary-text);
     font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
-.game-container {
+/* --- TOGGLE BUTTON --- */
+#fullscreen-btn {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 2000;
+    background: #333;
+    color: white;
+    border: 2px solid white;
+    border-radius: 4px;
+    font-size: 12px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background-color 0.2s;
+}
+
+#fullscreen-btn:hover { background: #555; }
+
+/* --- GAME CONTAINER & SCREEN --- */
+#game-container {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -29,12 +52,22 @@ html, body {
     height: 100%;
 }
 
+#screen {
+    width: 100%;
+    max-width: 960px;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+    transform-origin: center center;
+    box-shadow: 0 0 50px rgba(0,0,0,0.8);
+    flex-shrink: 0;
+}
+
 canvas {
     display: block;
     width: 100%;
-    max-width: 100%;
-    aspect-ratio: 16 / 9;
-    background-color: #000;
+    height: 100%;
 }
 
 #hud {
@@ -47,9 +80,9 @@ canvas {
     font-size: 14px;
     text-align: right;
     pointer-events: none;
+    z-index: 10;
 }
 
-/* [MODIFIED] Overlay Panel styles for better readability and scrolling */
 .overlay-panel {
     position: fixed;
     top: 50%;
@@ -67,15 +100,8 @@ canvas {
     overflow-y: auto;
 }
 
-.overlay-panel.hidden {
-    display: none;
-}
-
-.overlay-panel h2, .overlay-panel h3 {
-    text-align: center;
-    margin-top: 1em;
-    margin-bottom: 0.5em;
-}
+.overlay-panel.hidden { display: none; }
+.overlay-panel h2, .overlay-panel h3 { text-align: center; margin-top: 1em; margin-bottom: 0.5em; }
 .overlay-panel h2:first-child { margin-top: 0; }
 .overlay-panel ul { list-style-position: inside; padding-left: 10px; }
 .overlay-panel li { margin-bottom: 0.5em; }
@@ -88,18 +114,19 @@ canvas {
 .overlay-panel button { display: block; margin: 20px auto 0; padding: 10px 20px; font-size: 1em; background: var(--btn-bg); color: var(--primary-text); border: 1px solid var(--primary-text); border-radius: 5px; cursor: pointer; }
 .overlay-panel button:hover { background: var(--btn-active-bg); }
 
+/* --- MOBILE CONTROLS OVERLAY --- */
 #mobile-controls {
     position: fixed;
     bottom: 20px;
     left: 0;
     right: 0;
     width: 100%;
-    height: 120px;
     display: none; /* Hidden by default */
     justify-content: space-between;
-    align-items: center;
-    padding: 0 20px;
-    pointer-events: none;
+    align-items: flex-end;
+    padding: 0 40px;
+    pointer-events: none; /* Let touches pass through the blank space */
+    z-index: 3000;
 }
 
 .mobile-left, .mobile-right {
@@ -108,28 +135,33 @@ canvas {
 }
 
 .mobile-btn {
-    width: 80px;
-    height: 80px;
+    width: 85px;
+    height: 85px;
     border-radius: 50%;
-    border: 2px solid var(--primary-text);
+    border: 3px solid rgba(255,255,255,0.4);
     background-color: var(--btn-bg);
     color: var(--primary-text);
-    font-size: 24px;
+    font-size: 20px;
     font-weight: bold;
     user-select: none;
-    -webkit-user-select: none; /* For Safari */
-    -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
-    pointer-events: all;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    pointer-events: auto; /* Re-enable clicks on the buttons themselves */
     display: flex;
     justify-content: center;
     align-items: center;
+    backdrop-filter: blur(4px);
+    transition: transform 0.05s, background-color 0.05s;
+    touch-action: none;
 }
 
-.mobile-btn:active {
+/* Updated feedback to use JS toggled class for consistency across touch & mouse */
+.mobile-btn:active, .mobile-btn.active {
     background-color: var(--btn-active-bg);
+    transform: scale(0.92);
 }
 
-/* [NEW] Help toggle button styles */
 #help-toggle-button {
     position: fixed;
     bottom: 10px;
@@ -143,17 +175,15 @@ canvas {
     z-index: 50;
     transition: background-color 0.2s;
 }
-#help-toggle-button:hover {
-    background-color: rgba(0, 0, 0, 0.7);
-}
+#help-toggle-button:hover { background-color: rgba(0, 0, 0, 0.7); }
 
-
-/* Show mobile controls and hide help button on touch/small screens */
+/* --- DISPLAY LOGIC --- */
+/* Show mobile controls via OS Detection OR if the app is in Fullscreen mode */
 @media (hover: none) and (pointer: coarse), (max-width: 768px) {
-    #mobile-controls {
-        display: flex;
-    }
-    #help-toggle-button {
-        display: none; /* Hide button to avoid overlap with mobile controls */
-    }
+    #mobile-controls { display: flex; }
+    #help-toggle-button { display: none; }
 }
+
+body.is-fullscreen #mobile-controls { display: flex; }
+body.is-fullscreen #help-toggle-button { display: none; }
+body.is-fullscreen #fullscreen-btn { display: none; }

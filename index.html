@@ -2,15 +2,23 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <!-- REQUIRED METADATA: locks zoom and scaling on mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Planck Racer</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚙</text></svg>">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <main class="game-container">
-        <canvas id="game-canvas"></canvas>
-    </main>
+    <!-- TOGGLE BUTTON -->
+    <button id="fullscreen-btn">📱 Fullscreen</button>
+
+    <!-- GAME CONTAINER (Wraps the content to be scaled) -->
+    <div id="game-container">
+        <!-- THE SCREEN: Fixed resolution internal logic (960x540 for 16:9) -->
+        <div id="screen">
+            <canvas id="game-canvas"></canvas>
+        </div>
+    </div>
 
     <div id="hud">
         <div class="hud-item">Speed: <span id="speed-value">0</span> km/h</div>
@@ -22,7 +30,6 @@
         <div class="hud-item">Torque: <span id="torque-value">0</span></div>
     </div>
 
-    <!-- [MODIFIED] Help Panel now contains the full README content -->
     <div id="help-panel" class="overlay-panel hidden">
         <h2>🚙 Planck Racer Help</h2>
         
@@ -67,6 +74,7 @@
         <button id="close-help-btn">Close</button>
     </div>
     
+    <!-- MOBILE TOUCH CONTROLS OVERLAY -->
     <div id="mobile-controls">
         <div class="mobile-left">
             <button id="tilt-backward-btn" class="mobile-btn">◄</button>
@@ -80,7 +88,6 @@
 
     <div id="dev-overlay" class="overlay-panel hidden">
         <h3>Dev Tools</h3>
-        <!-- Dev controls can be added here -->
     </div>
 
     <div id="game-over-panel" class="overlay-panel hidden">
@@ -89,12 +96,9 @@
         <p>Press 'R' to restart from last checkpoint.</p>
     </div>
 
-    <!-- [NEW] Help toggle button in the corner -->
     <div id="help-toggle-button">Press 'H' for Help</div>
 
-    <!-- Planck.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/planck@latest/dist/planck.min.js"></script>
-    <!-- Main Game Script -->
     <script src="script.js"></script>
 </body>
 </html>

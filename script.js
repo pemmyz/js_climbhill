@@ -75,7 +75,13 @@ window.addEventListener('load', () => {
         checkPair(dataB, dataA, contact.getFixtureA());
     }
 
-    function resizeCanvas() { const dpr = window.devicePixelRatio || 1; const rect = canvas.getBoundingClientRect(); canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; ctx.scale(dpr, dpr); }
+    function resizeCanvas() { 
+        const dpr = window.devicePixelRatio || 1; 
+        const rect = canvas.getBoundingClientRect(); 
+        canvas.width = rect.width * dpr; 
+        canvas.height = rect.height * dpr; 
+        ctx.scale(dpr, dpr); 
+    }
     
     // D. INPUT MANAGER
     const input = {
@@ -87,6 +93,7 @@ window.addEventListener('load', () => {
             
             const toggleHelp = () => helpPanel.classList.toggle('hidden');
 
+            // Keyboard Listeners
             window.addEventListener('keydown', e => this.keys.add(e.code));
             window.addEventListener('keyup', e => {
                 this.keys.delete(e.code);
@@ -96,14 +103,56 @@ window.addEventListener('load', () => {
                 if (e.code === 'KeyD') gameState.debug = !gameState.debug;
             });
 
-            // [NEW] Event listeners for help buttons
-            helpToggleButton.addEventListener('click', toggleHelp);
-            closeHelpBtn.addEventListener('click', toggleHelp);
+            if (helpToggleButton) helpToggleButton.addEventListener('click', toggleHelp);
+            if (closeHelpBtn) closeHelpBtn.addEventListener('click', toggleHelp);
             
-            const setupMobileBtn = (id, action) => { const btn = document.getElementById(id); btn.addEventListener('touchstart', (e) => { e.preventDefault(); action(1); }, { passive: false }); btn.addEventListener('touchend', (e) => { e.preventDefault(); action(0); }, { passive: false }); };
-            setupMobileBtn('throttle-btn', v => this.throttle = v); setupMobileBtn('brake-btn', v => this.brake = v); setupMobileBtn('tilt-forward-btn', v => this.pitch = v); setupMobileBtn('tilt-backward-btn', v => this.pitch = -v);
+            // Pointer Event Setup (Handles Touch & Mouse smoothly)
+            const setupMobileBtn = (id, action) => { 
+                const btn = document.getElementById(id); 
+                if (!btn) return;
+                
+                const press = (e) => { 
+                    e.preventDefault(); 
+                    btn.classList.add('active'); // Visual feedback
+                    action(1); 
+                };
+                const release = (e) => { 
+                    e.preventDefault(); 
+                    btn.classList.remove('active'); 
+                    action(0); 
+                };
+
+                // Use pointer events for cross-platform (desktop + mobile) robustness
+                btn.addEventListener('pointerdown', press); 
+                btn.addEventListener('pointerup', release); 
+                btn.addEventListener('pointercancel', release); 
+                btn.addEventListener('pointerleave', release); 
+
+                // Prevent right-click/long-press menus on these buttons
+                btn.addEventListener('contextmenu', e => e.preventDefault());
+            };
+
+            setupMobileBtn('throttle-btn', v => this.throttle = v); 
+            setupMobileBtn('brake-btn', v => this.brake = v); 
+            setupMobileBtn('tilt-forward-btn', v => this.pitch = v); 
+            setupMobileBtn('tilt-backward-btn', v => this.pitch = -v);
         },
-        update() { this.throttle = this.keys.has('ArrowUp') ? 1 : 0; this.brake = this.keys.has('ArrowDown') ? 1 : 0; this.pitch = (this.keys.has('ArrowRight') ? 1 : 0) - (this.keys.has('ArrowLeft') ? 1 : 0); const gp = navigator.getGamepads ? navigator.getGamepads()[0] : null; if (gp) { this.throttle = Math.max(this.throttle, gp.buttons[7].value); this.brake = Math.max(this.brake, gp.buttons[6].value); if (Math.abs(gp.axes[0]) > 0.15) this.pitch = gp.axes[0]; if (gp.buttons[9].pressed) gameState.paused = !gameState.paused; } },
+        update() { 
+            // Prefer Keyboard if pressed, fallback to visual touch values
+            if (this.keys.has('ArrowUp')) this.throttle = 1;
+            if (this.keys.has('ArrowDown')) this.brake = 1;
+            
+            let keyPitch = (this.keys.has('ArrowRight') ? 1 : 0) - (this.keys.has('ArrowLeft') ? 1 : 0);
+            if (keyPitch !== 0) this.pitch = keyPitch;
+
+            const gp = navigator.getGamepads ? navigator.getGamepads()[0] : null; 
+            if (gp) { 
+                this.throttle = Math.max(this.throttle, gp.buttons[7].value); 
+                this.brake = Math.max(this.brake, gp.buttons[6].value); 
+                if (Math.abs(gp.axes[0]) > 0.15) this.pitch = gp.axes[0]; 
+                if (gp.buttons[9].pressed) gameState.paused = !gameState.paused; 
+            } 
+        },
         
         handleReset() {
             if (gameState.lastCheckpoint) {
@@ -357,10 +406,62 @@ window.addEventListener('load', () => {
         hud.update();
     }
 
+    // --- FULLSCREEN & MOBILE SCALING LOGIC ---
+    const screenElement = document.getElementById("screen");
+    const fullscreenBtn = document.getElementById("fullscreen-btn");
+
+    function scaleGame() {
+        // ALWAYS apply scaling so it perfectly fits the browser window.
+        const baseWidth = 960;
+        const baseHeight = 540; // 16:9 ratio
+        
+        if (screenElement) {
+            screenElement.style.width = baseWidth + 'px';
+            screenElement.style.height = baseHeight + 'px';
+            screenElement.style.maxWidth = 'none';
+            
+            const scale = Math.min(
+                window.innerWidth / baseWidth,
+                window.innerHeight / baseHeight
+            );
+            
+            screenElement.style.transform = `scale(${scale})`;
+        }
+        
+        // Detect native fullscreen state
+        const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        
+        // Toggles the CSS class triggering on-screen controls explicitly
+        if (isFullscreen) {
+            document.body.classList.add('is-fullscreen');
+        } else {
+            document.body.classList.remove('is-fullscreen');
+        }
+
+        // Prevent body scrolling/bouncing natively
+        document.body.style.overflow = 'hidden';
+        document.body.style.touchAction = 'none';
+        document.body.style.margin = '0';
+        document.body.style.padding = '0';
+        
+        setTimeout(resizeCanvas, 50);
+    }
+
+    function goFull() {
+        const el = document.documentElement;
+        if (el.requestFullscreen) el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    }
+
+    window.addEventListener("fullscreenchange", scaleGame);
+    window.addEventListener("webkitfullscreenchange", scaleGame);
+    if (fullscreenBtn) fullscreenBtn.addEventListener('click', goFull);
+
     // L. INITIALIZATION
     function init() {
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
+        scaleGame();
+        window.addEventListener('resize', scaleGame);
+
         initWorld();
         input.init();
         const startPosition = Vec2(4, 5);
@@ -370,7 +471,9 @@ window.addEventListener('load', () => {
         terrainManager.init();
         gameState.lastCheckpoint = { pos: startPosition, angle: 0, linearVel: Vec2.zero(), angularVel: 0 };
         lastTime = performance.now();
+        
         requestAnimationFrame(gameLoop);
     }
+    
     init();
 });
