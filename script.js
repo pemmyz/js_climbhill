@@ -50,7 +50,7 @@ window.addEventListener('load', () => {
     // C. GAME STATE & WORLD SETUP
     const canvas = document.getElementById('game-canvas');
     const ctx = canvas.getContext('2d');
-    let world, vehicle, terrainManager, camera;
+    let world, vehicle, terrainManager, camera, manualResetBtn;
     let particles = [];
     let gameState = { paused: false, debug: false, gameOver: false, distance: 0, fuel: GAME_PARAMS.FUEL_START, lastCheckpoint: null, };
     const pl = planck, Vec2 = pl.Vec2;
@@ -68,6 +68,8 @@ window.addEventListener('load', () => {
         const dataA = getContactData(contact.getFixtureA()); const dataB = getContactData(contact.getFixtureB()); if (!dataA || !dataB) return;
         const checkPair = (d1, d2, fix2) => {
             if (d1.type === 'wheel' && d2.type === 'ground') d1.owner.setGrounded(d1.wheelId, isBeginning);
+            // Track when the car body itself is hitting the ground
+            if (d1.type === 'chassis' && d2.type === 'ground') vehicle.setChassisGrounded(isBeginning);
             if (d1.type === 'chassis' && d2.type === 'checkpoint' && isBeginning) { gameState.lastCheckpoint = { pos: vehicle.chassis.getPosition(), angle: vehicle.chassis.getAngle(), linearVel: vehicle.chassis.getLinearVelocity(), angularVel: vehicle.chassis.getAngularVelocity() }; world.destroyBody(fix2.getBody()); }
             if (d1.type === 'chassis' && d2.type === 'fuel' && isBeginning) { gameState.fuel = Math.min(GAME_PARAMS.FUEL_START, gameState.fuel + 50); world.destroyBody(fix2.getBody()); }
         };
@@ -83,67 +85,146 @@ window.addEventListener('load', () => {
         ctx.scale(dpr, dpr); 
     }
     
+    // Shared Flip Function used by both Auto and Manual resets
+    function performFlip() {
+        const dpr = window.devicePixelRatio || 1;
+        const screenTopY = camera.y + (canvas.height / dpr / 2) / (PPM * camera.zoom);
+        const dropY = screenTopY + 1.35; 
+        
+        // Drop car from top of screen perfectly onto its wheels
+        vehicle.reset(Vec2(vehicle.chassis.getPosition().x, dropY), 0, Vec2.zero(), 0);
+        
+        if (manualResetBtn) manualResetBtn.style.display = 'none';
+        if (vehicle) vehicle.upsideDownTimer = 0;
+    }
+
+    // UI Button initialization for Upside Down state
+    function initManualResetBtn() {
+        manualResetBtn = document.createElement('button');
+        manualResetBtn.textContent = '🔄 Flip Car';
+        manualResetBtn.style.position = 'fixed';
+        manualResetBtn.style.top = '30%';
+        manualResetBtn.style.left = '50%';
+        manualResetBtn.style.transform = 'translate(-50%, -50%)';
+        manualResetBtn.style.padding = '15px 35px';
+        manualResetBtn.style.fontSize = '24px';
+        manualResetBtn.style.fontWeight = 'bold';
+        manualResetBtn.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
+        manualResetBtn.style.color = '#fff';
+        manualResetBtn.style.border = '3px solid #fff';
+        manualResetBtn.style.borderRadius = '12px';
+        manualResetBtn.style.cursor = 'pointer';
+        manualResetBtn.style.zIndex = '5000';
+        manualResetBtn.style.display = 'none'; // Hidden by default
+        manualResetBtn.style.boxShadow = '0 8px 25px rgba(0,0,0,0.6)';
+        manualResetBtn.style.backdropFilter = 'blur(4px)';
+        manualResetBtn.style.transition = 'transform 0.1s, background-color 0.2s';
+        
+        manualResetBtn.onmouseover = () => manualResetBtn.style.backgroundColor = 'rgba(192, 57, 43, 1)';
+        manualResetBtn.onmouseout = () => manualResetBtn.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
+        manualResetBtn.onmousedown = () => manualResetBtn.style.transform = 'translate(-50%, -50%) scale(0.95)';
+        manualResetBtn.onmouseup = () => manualResetBtn.style.transform = 'translate(-50%, -50%) scale(1)';
+        
+        manualResetBtn.addEventListener('click', performFlip);
+        
+        document.body.appendChild(manualResetBtn);
+    }
+
     // D. INPUT MANAGER
     const input = {
         throttle: 0, brake: 0, pitch: 0, keys: new Set(),
+        touchState: { throttle: 0, brake: 0, fwd: 0, bwd: 0 },
+        
         init() {
             const helpPanel = document.getElementById('help-panel');
             const helpToggleButton = document.getElementById('help-toggle-button');
             const closeHelpBtn = document.getElementById('close-help-btn');
-            
             const toggleHelp = () => helpPanel.classList.toggle('hidden');
 
-            // Keyboard Listeners
-            window.addEventListener('keydown', e => this.keys.add(e.code));
-            window.addEventListener('keyup', e => {
-                this.keys.delete(e.code);
+            const setVisualBtn = (id, active) => {
+                const btn = document.getElementById(id);
+                if (btn) {
+                    if (active) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                }
+            };
+
+            const isUp = () => this.keys.has('ArrowUp') || this.keys.has('KeyW');
+            const isDown = () => this.keys.has('ArrowDown') || this.keys.has('KeyS');
+            const isRight = () => this.keys.has('ArrowRight') || this.keys.has('KeyD');
+            const isLeft = () => this.keys.has('ArrowLeft') || this.keys.has('KeyA');
+
+            // Keyboard Listeners (Visually trigger mobile buttons)
+            window.addEventListener('keydown', e => {
+                this.keys.add(e.code);
+                
                 if (e.code === 'KeyR') this.handleReset();
                 if (e.code === 'Space') gameState.paused = !gameState.paused;
                 if (e.code === 'KeyH') toggleHelp();
                 if (e.code === 'KeyD') gameState.debug = !gameState.debug;
+
+                if (isUp()) setVisualBtn('throttle-btn', true);
+                if (isDown()) setVisualBtn('brake-btn', true);
+                if (isRight()) setVisualBtn('tilt-forward-btn', true);
+                if (isLeft()) setVisualBtn('tilt-backward-btn', true);
+            });
+
+            window.addEventListener('keyup', e => {
+                this.keys.delete(e.code);
+                
+                if (!isUp()) setVisualBtn('throttle-btn', false);
+                if (!isDown()) setVisualBtn('brake-btn', false);
+                if (!isRight()) setVisualBtn('tilt-forward-btn', false);
+                if (!isLeft()) setVisualBtn('tilt-backward-btn', false);
             });
 
             if (helpToggleButton) helpToggleButton.addEventListener('click', toggleHelp);
             if (closeHelpBtn) closeHelpBtn.addEventListener('click', toggleHelp);
             
             // Pointer Event Setup (Handles Touch & Mouse smoothly)
-            const setupMobileBtn = (id, action) => { 
+            const setupMobileBtn = (id, stateKey) => { 
                 const btn = document.getElementById(id); 
                 if (!btn) return;
                 
                 const press = (e) => { 
                     e.preventDefault(); 
-                    btn.classList.add('active'); // Visual feedback
-                    action(1); 
+                    btn.classList.add('active'); 
+                    this.touchState[stateKey] = 1; 
                 };
                 const release = (e) => { 
                     e.preventDefault(); 
-                    btn.classList.remove('active'); 
-                    action(0); 
+                    // Prevent visual un-press if keyboard is holding the equivalent key
+                    const isHeldByKey = 
+                        (stateKey === 'throttle' && isUp()) ||
+                        (stateKey === 'brake' && isDown()) ||
+                        (stateKey === 'fwd' && isRight()) ||
+                        (stateKey === 'bwd' && isLeft());
+                    
+                    if (!isHeldByKey) btn.classList.remove('active'); 
+                    this.touchState[stateKey] = 0; 
                 };
 
-                // Use pointer events for cross-platform (desktop + mobile) robustness
                 btn.addEventListener('pointerdown', press); 
                 btn.addEventListener('pointerup', release); 
                 btn.addEventListener('pointercancel', release); 
                 btn.addEventListener('pointerleave', release); 
-
-                // Prevent right-click/long-press menus on these buttons
                 btn.addEventListener('contextmenu', e => e.preventDefault());
             };
 
-            setupMobileBtn('throttle-btn', v => this.throttle = v); 
-            setupMobileBtn('brake-btn', v => this.brake = v); 
-            setupMobileBtn('tilt-forward-btn', v => this.pitch = v); 
-            setupMobileBtn('tilt-backward-btn', v => this.pitch = -v);
+            setupMobileBtn('throttle-btn', 'throttle'); 
+            setupMobileBtn('brake-btn', 'brake'); 
+            setupMobileBtn('tilt-forward-btn', 'fwd'); 
+            setupMobileBtn('tilt-backward-btn', 'bwd');
         },
+        
         update() { 
-            // Prefer Keyboard if pressed, fallback to visual touch values
-            if (this.keys.has('ArrowUp')) this.throttle = 1;
-            if (this.keys.has('ArrowDown')) this.brake = 1;
+            // Logical merge of Touch and Keyboard inputs
+            this.throttle = Math.max((this.keys.has('ArrowUp') || this.keys.has('KeyW')) ? 1 : 0, this.touchState.throttle);
+            this.brake = Math.max((this.keys.has('ArrowDown') || this.keys.has('KeyS')) ? 1 : 0, this.touchState.brake);
             
-            let keyPitch = (this.keys.has('ArrowRight') ? 1 : 0) - (this.keys.has('ArrowLeft') ? 1 : 0);
-            if (keyPitch !== 0) this.pitch = keyPitch;
+            let r = Math.max((this.keys.has('ArrowRight') || this.keys.has('KeyD')) ? 1 : 0, this.touchState.fwd);
+            let l = Math.max((this.keys.has('ArrowLeft') || this.keys.has('KeyA')) ? 1 : 0, this.touchState.bwd);
+            this.pitch = r - l;
 
             const gp = navigator.getGamepads ? navigator.getGamepads()[0] : null; 
             if (gp) { 
@@ -259,26 +340,39 @@ window.addEventListener('load', () => {
             rearJoint: rear.joint,
             frontJoint: front.joint,
             groundContactCount: { rear: 0, front: 0 },
+            chassisGroundedCount: 0, // Upside down tracking
+            upsideDownTimer: 0,      // Timer
             totalAppliedTorque: 0,
 
             get isRearGrounded()  { return this.groundContactCount.rear  > 0; },
             get isFrontGrounded() { return this.groundContactCount.front > 0; },
+            get isChassisGrounded() { return this.chassisGroundedCount > 0; },
 
             setGrounded(wheelId, isGrounded) {
-            this.groundContactCount[wheelId] += isGrounded ? 1 : -1;
+                // Safeguard: don't let it dip below 0
+                this.groundContactCount[wheelId] = Math.max(0, this.groundContactCount[wheelId] + (isGrounded ? 1 : -1));
+            },
+            
+            setChassisGrounded(isGrounded) {
+                // Safeguard: don't let it dip below 0
+                this.chassisGroundedCount = Math.max(0, this.chassisGroundedCount + (isGrounded ? 1 : -1));
             },
 
             reset(pos, angle, linearVel, angularVel) {
-            this.chassis.setPosition(pos);
-            this.chassis.setAngle(angle);
-            this.chassis.setLinearVelocity(linearVel || Vec2.zero());
-            this.chassis.setAngularVelocity(angularVel || 0);
-            this.rearWheel.setPosition(chassis.getWorldPoint(rearWheelAnchorLocal));
-            this.frontWheel.setPosition(chassis.getWorldPoint(frontWheelAnchorLocal));
-            this.rearWheel.setLinearVelocity(linearVel || Vec2.zero());
-            this.frontWheel.setLinearVelocity(linearVel || Vec2.zero());
-            this.rearWheel.setAngularVelocity(0);
-            this.frontWheel.setAngularVelocity(0);
+                this.upsideDownTimer = 0;
+                this.chassisGroundedCount = 0;
+                this.groundContactCount = { rear: 0, front: 0 };
+                
+                this.chassis.setPosition(pos);
+                this.chassis.setAngle(angle);
+                this.chassis.setLinearVelocity(linearVel || Vec2.zero());
+                this.chassis.setAngularVelocity(angularVel || 0);
+                this.rearWheel.setPosition(chassis.getWorldPoint(rearWheelAnchorLocal));
+                this.frontWheel.setPosition(chassis.getWorldPoint(frontWheelAnchorLocal));
+                this.rearWheel.setLinearVelocity(linearVel || Vec2.zero());
+                this.frontWheel.setLinearVelocity(linearVel || Vec2.zero());
+                this.rearWheel.setAngularVelocity(0);
+                this.frontWheel.setAngularVelocity(0);
             },
 
             update(dt, input) {
@@ -376,6 +470,33 @@ window.addEventListener('load', () => {
         
         input.update();
 
+        // Dead zone check: body touches ground, wheels do not, AND car is sliding relatively slowly
+        const currentSpeed = vehicle.chassis.getLinearVelocity().length();
+        const isStuck = currentSpeed < 3.0; // Allow a bit of sliding movement (Dead Zone 1)
+
+        if (vehicle.isChassisGrounded && !vehicle.isRearGrounded && !vehicle.isFrontGrounded && isStuck) {
+            vehicle.upsideDownTimer += dt;
+        } else {
+            // Decay timer instead of resetting to 0 instantly, protecting against brief physics bounces (Dead Zone 2)
+            vehicle.upsideDownTimer = Math.max(0, vehicle.upsideDownTimer - dt * 2);
+        }
+
+        // Show button at 2.5 seconds
+        if (vehicle.upsideDownTimer >= 2.5) {
+            if (manualResetBtn && manualResetBtn.style.display !== 'block') {
+                manualResetBtn.style.display = 'block';
+            }
+        } else {
+            if (manualResetBtn && manualResetBtn.style.display === 'block') {
+                manualResetBtn.style.display = 'none';
+            }
+        }
+
+        // Auto flip at 3.0 seconds
+        if (vehicle.upsideDownTimer >= 3.0) {
+            performFlip();
+        }
+
         if (!gameState.gameOver) {
             if (!gameState.debug) {
                 gameState.fuel -= (GAME_PARAMS.FUEL_DRAIN_RATE + input.throttle * GAME_PARAMS.FUEL_DRAIN_THROTTLE_MULTIPLIER) * dt;
@@ -463,6 +584,7 @@ window.addEventListener('load', () => {
         window.addEventListener('resize', scaleGame);
 
         initWorld();
+        initManualResetBtn();
         input.init();
         const startPosition = Vec2(4, 5);
         vehicle = createVehicle(world, startPosition);
