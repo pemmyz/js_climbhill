@@ -187,3 +187,31 @@ canvas {
 body.is-fullscreen #mobile-controls { display: flex; }
 body.is-fullscreen #help-toggle-button { display: none; }
 body.is-fullscreen #fullscreen-btn { display: none; }
+
+
+
+
+
+
+
+
+
+
+
+
+/* --- CSS Update --- */
+body.is-fullscreen #screen {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    aspect-ratio: auto !important;
+    transform: none !important; /* Disable the JS scaling */
+    border-radius: 0;
+}
+
+body.is-fullscreen #game-container {
+    width: 100vw;
+    height: 100vh;
+}
+
+

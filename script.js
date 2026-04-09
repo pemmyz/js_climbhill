@@ -531,42 +531,58 @@ window.addEventListener('load', () => {
     const screenElement = document.getElementById("screen");
     const fullscreenBtn = document.getElementById("fullscreen-btn");
 
-    function scaleGame() {
-        // ALWAYS apply scaling so it perfectly fits the browser window.
-        const baseWidth = 960;
-        const baseHeight = 540; // 16:9 ratio
-        
-        if (screenElement) {
-            screenElement.style.width = baseWidth + 'px';
-            screenElement.style.height = baseHeight + 'px';
-            screenElement.style.maxWidth = 'none';
-            
-            const scale = Math.min(
-                window.innerWidth / baseWidth,
-                window.innerHeight / baseHeight
-            );
-            
-            screenElement.style.transform = `scale(${scale})`;
-        }
-        
-        // Detect native fullscreen state
-        const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
-        
-        // Toggles the CSS class triggering on-screen controls explicitly
-        if (isFullscreen) {
-            document.body.classList.add('is-fullscreen');
-        } else {
-            document.body.classList.remove('is-fullscreen');
-        }
 
-        // Prevent body scrolling/bouncing natively
-        document.body.style.overflow = 'hidden';
-        document.body.style.touchAction = 'none';
-        document.body.style.margin = '0';
-        document.body.style.padding = '0';
+
+
+
+
+// --- JS Update: Replace the existing scaleGame function ---
+function scaleGame() {
+    const baseWidth = 960;
+    const baseHeight = 540;
+    
+    // Detect native fullscreen state
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    
+    if (isFullscreen) {
+        document.body.classList.add('is-fullscreen');
+        // Reset manual scaling for edge-to-edge
+        screenElement.style.width = '100vw';
+        screenElement.style.height = '100vh';
+        screenElement.style.transform = 'none';
+    } else {
+        document.body.classList.remove('is-fullscreen');
+        // Maintain 16:9 locked box for windowed mode
+        screenElement.style.width = baseWidth + 'px';
+        screenElement.style.height = baseHeight + 'px';
         
-        setTimeout(resizeCanvas, 50);
+        const scale = Math.min(
+            window.innerWidth / baseWidth,
+            window.innerHeight / baseHeight
+        );
+        screenElement.style.transform = `scale(${scale})`;
     }
+
+    // Always ensure canvas resolution matches the element size
+    resizeCanvas();
+    
+    // Prevent body scrolling
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     function goFull() {
         const el = document.documentElement;
