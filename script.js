@@ -414,8 +414,52 @@ window.addEventListener('load', () => {
         return vehicleObj;
     }
 
-    // G. CAMERA
-    function createCamera() { return { x: 0, y: 0, zoom: 1.0, update(dt, targetBody) { const targetPos = targetBody.getPosition(); const targetVel = targetBody.getLinearVelocity(); const lookahead = Vec2(targetVel.x * 0.4, targetVel.y * 0.2); const finalTarget = targetPos.clone().add(lookahead).add(Vec2(2, 1)); this.x = smoothFollow(this.x, finalTarget.x, 3, dt); this.y = smoothFollow(this.y, finalTarget.y, 3, dt); } }; }
+
+
+
+
+
+
+
+
+// G. CAMERA
+    function createCamera() { 
+        return { 
+            x: 0, 
+            y: 0, 
+            zoom: 1.0, 
+            update(dt, targetBody) { 
+                const targetPos = targetBody.getPosition(); 
+                const targetVel = targetBody.getLinearVelocity(); 
+                const lookahead = Vec2(targetVel.x * 0.4, targetVel.y * 0.2); 
+                
+                // Detect mobile to shift the camera downwards (showing less sky and more ground)
+                const isMobile = window.matchMedia("(max-width: 768px), (hover: none) and (pointer: coarse)").matches;
+                
+                // Base vertical offset: Drop camera 1.5m below car on mobile, else 1m above
+                let targetY = targetPos.y + lookahead.y + (isMobile ? -1.5 : 1.0);
+                
+                // On mobile, gently clamp the camera's upward tracking so 
+                // the ground doesn't disappear out the bottom of the screen during big jumps
+                if (isMobile && targetY > 2) {
+                    targetY = 2 + (targetY - 2) * 0.4;
+                }
+                
+                const finalTarget = Vec2(targetPos.x + lookahead.x + 2, targetY); 
+                
+                this.x = smoothFollow(this.x, finalTarget.x, 3, dt); 
+                this.y = smoothFollow(this.y, finalTarget.y, 3, dt); 
+            } 
+        }; 
+    }
+
+
+
+
+
+
+
+
     
     // H. PARTICLE SYSTEM
     function spawnParticle(pos, vel, lifetime, color) { particles.push({ pos, vel, lifetime, maxLifetime: lifetime, color }); }

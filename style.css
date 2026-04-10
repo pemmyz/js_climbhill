@@ -188,17 +188,6 @@ body.is-fullscreen #mobile-controls { display: flex; }
 body.is-fullscreen #help-toggle-button { display: none; }
 body.is-fullscreen #fullscreen-btn { display: none; }
 
-
-
-
-
-
-
-
-
-
-
-
 /* --- CSS Update --- */
 body.is-fullscreen #screen {
     width: 100vw !important;
@@ -213,5 +202,3 @@ body.is-fullscreen #game-container {
     width: 100vw;
     height: 100vh;
 }
-
-
