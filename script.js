@@ -79,16 +79,22 @@ window.addEventListener('load', () => {
 
     function resizeCanvas() { 
         const dpr = window.devicePixelRatio || 1; 
-        const rect = canvas.getBoundingClientRect(); 
-        canvas.width = rect.width * dpr; 
-        canvas.height = rect.height * dpr; 
+        // Use clientWidth/clientHeight to ignore CSS transformed scale sizes
+        // guaranteeing the internal resolution remains perfectly normalized
+        const cw = canvas.clientWidth;
+        const ch = canvas.clientHeight;
+        canvas.width = cw * dpr; 
+        canvas.height = ch * dpr; 
         ctx.scale(dpr, dpr); 
     }
     
     // Shared Flip Function used by both Auto and Manual resets
     function performFlip() {
         const dpr = window.devicePixelRatio || 1;
-        const screenTopY = camera.y + (canvas.height / dpr / 2) / (PPM * camera.zoom);
+        const ch = canvas.clientHeight;
+        // Dynamically compute the fovScale here so the car always drops from just above the screen
+        const fovScale = ch / 540;
+        const screenTopY = camera.y + (ch / 2) / (PPM * camera.zoom * fovScale);
         const dropY = screenTopY + 1.35; 
         
         // Drop car from top of screen perfectly onto its wheels
@@ -414,15 +420,7 @@ window.addEventListener('load', () => {
         return vehicleObj;
     }
 
-
-
-
-
-
-
-
-
-// G. CAMERA
+    // G. CAMERA
     function createCamera() { 
         return { 
             x: 0, 
@@ -453,14 +451,6 @@ window.addEventListener('load', () => {
         }; 
     }
 
-
-
-
-
-
-
-
-    
     // H. PARTICLE SYSTEM
     function spawnParticle(pos, vel, lifetime, color) { particles.push({ pos, vel, lifetime, maxLifetime: lifetime, color }); }
     function updateAndRenderParticles(dt, ctx) { for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.pos.add(p.vel.mul(dt)); p.vel.y -= 20 * dt; p.lifetime -= dt; if (p.lifetime <= 0) particles.splice(i, 1); else { const a = p.lifetime / p.maxLifetime; ctx.fillStyle = `rgba(${p.color}, ${a})`; ctx.fillRect(p.pos.x, p.pos.y, 0.1, 0.1); } } }
@@ -502,7 +492,100 @@ window.addEventListener('load', () => {
     };
     
     // J. RENDERING
-    function render() { const { width, height } = canvas; const dpr = window.devicePixelRatio || 1; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); const skyGradient = ctx.createLinearGradient(0, 0, 0, height); skyGradient.addColorStop(0, '#4b759e'); skyGradient.addColorStop(1, '#9cd2f2'); ctx.fillStyle = skyGradient; ctx.fillRect(0, 0, width, height); ctx.save(); ctx.translate(width / 2 / dpr, height / 2 / dpr); ctx.scale(PPM * camera.zoom, -PPM * camera.zoom); ctx.translate(-camera.x, -camera.y); for (let body = world.getBodyList(); body; body = body.getNext()) { const pos = body.getPosition(); const angle = body.getAngle(); ctx.save(); ctx.translate(pos.x, pos.y); ctx.rotate(angle); if (body.renderData && body.renderData.type === 'checkpoint') { ctx.fillStyle = 'gold'; ctx.fillRect(-0.25, -1, 0.5, 2); } else if (body.renderData && body.renderData.type === 'fuel') { ctx.fillStyle = 'red'; ctx.fillRect(-0.25, -0.25, 0.5, 0.5); } for (let fixture = body.getFixtureList(); fixture; fixture = fixture.getNext()) { const shape = fixture.getShape(), type = shape.getType(); if (type === 'circle') { ctx.beginPath(); ctx.arc(0, 0, shape.m_radius, 0, 2 * Math.PI); ctx.fillStyle = '#333'; ctx.fill(); ctx.strokeStyle = '#ccc'; ctx.lineWidth = 0.1; ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(shape.m_radius, 0); ctx.stroke(); } else if (type === 'polygon') { const vs = shape.m_vertices; ctx.beginPath(); ctx.moveTo(vs[0].x, vs[0].y); for (let i = 1; i < vs.length; i++) ctx.lineTo(vs[i].x, vs[i].y); ctx.closePath(); ctx.fillStyle = body.getFixtureList() === fixture ? '#a00' : '#c00'; ctx.fill(); } else if (type === 'chain') { ctx.beginPath(); const vs = shape.m_vertices; ctx.moveTo(vs[0].x, vs[0].y); for (let i = 1; i < vs.length; i++) ctx.lineTo(vs[i].x, vs[i].y); ctx.strokeStyle = '#4a573e'; ctx.lineWidth = 0.2; ctx.stroke(); ctx.lineTo(vs[vs.length-1].x, -100); ctx.lineTo(vs[0].x, -100); ctx.closePath(); ctx.fillStyle = '#6b7f5b'; ctx.fill(); } } ctx.restore(); } updateAndRenderParticles(PHYSICS_STEP, ctx); if (gameState.debug) { ctx.lineWidth = 0.05; for (let j = world.getJointList(); j; j = j.getNext()) { const a1 = j.getAnchorA(), a2 = j.getAnchorB(); ctx.beginPath(); ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y); ctx.strokeStyle = 'rgba(0,255,255,0.5)'; ctx.stroke(); } } ctx.restore(); }
+    function render() {
+        const { width, height } = canvas;
+        const dpr = window.devicePixelRatio || 1;
+        const cw = width / dpr;
+        const ch = height / dpr;
+        
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        
+        const skyGradient = ctx.createLinearGradient(0, 0, 0, ch);
+        skyGradient.addColorStop(0, '#4b759e');
+        skyGradient.addColorStop(1, '#9cd2f2');
+        ctx.fillStyle = skyGradient;
+        ctx.fillRect(0, 0, cw, ch);
+        
+        ctx.save();
+        ctx.translate(cw / 2, ch / 2);
+        
+        // Ensure horizontal/vertical aspect ratios scale visually identical 
+        // to desktop windowed bounds when entering a variable mobile screen size
+        const fovScale = ch / 540;
+        ctx.scale(PPM * camera.zoom * fovScale, -PPM * camera.zoom * fovScale);
+        ctx.translate(-camera.x, -camera.y);
+        
+        for (let body = world.getBodyList(); body; body = body.getNext()) {
+            const pos = body.getPosition();
+            const angle = body.getAngle();
+            
+            ctx.save();
+            ctx.translate(pos.x, pos.y);
+            ctx.rotate(angle);
+            
+            if (body.renderData && body.renderData.type === 'checkpoint') {
+                ctx.fillStyle = 'gold';
+                ctx.fillRect(-0.25, -1, 0.5, 2);
+            } else if (body.renderData && body.renderData.type === 'fuel') {
+                ctx.fillStyle = 'red';
+                ctx.fillRect(-0.25, -0.25, 0.5, 0.5);
+            }
+            
+            for (let fixture = body.getFixtureList(); fixture; fixture = fixture.getNext()) {
+                const shape = fixture.getShape(), type = shape.getType();
+                if (type === 'circle') {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, shape.m_radius, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#333';
+                    ctx.fill();
+                    ctx.strokeStyle = '#ccc';
+                    ctx.lineWidth = 0.1;
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(0,0);
+                    ctx.lineTo(shape.m_radius, 0);
+                    ctx.stroke();
+                } else if (type === 'polygon') {
+                    const vs = shape.m_vertices;
+                    ctx.beginPath();
+                    ctx.moveTo(vs[0].x, vs[0].y);
+                    for (let i = 1; i < vs.length; i++) ctx.lineTo(vs[i].x, vs[i].y);
+                    ctx.closePath();
+                    ctx.fillStyle = body.getFixtureList() === fixture ? '#a00' : '#c00';
+                    ctx.fill();
+                } else if (type === 'chain') {
+                    ctx.beginPath();
+                    const vs = shape.m_vertices;
+                    ctx.moveTo(vs[0].x, vs[0].y);
+                    for (let i = 1; i < vs.length; i++) ctx.lineTo(vs[i].x, vs[i].y);
+                    ctx.strokeStyle = '#4a573e';
+                    ctx.lineWidth = 0.2;
+                    ctx.stroke();
+                    ctx.lineTo(vs[vs.length-1].x, -100);
+                    ctx.lineTo(vs[0].x, -100);
+                    ctx.closePath();
+                    ctx.fillStyle = '#6b7f5b';
+                    ctx.fill();
+                }
+            }
+            ctx.restore();
+        }
+        
+        updateAndRenderParticles(PHYSICS_STEP, ctx);
+        
+        if (gameState.debug) {
+            ctx.lineWidth = 0.05;
+            for (let j = world.getJointList(); j; j = j.getNext()) {
+                const a1 = j.getAnchorA(), a2 = j.getAnchorB();
+                ctx.beginPath();
+                ctx.moveTo(a1.x, a1.y);
+                ctx.lineTo(a2.x, a2.y);
+                ctx.strokeStyle = 'rgba(0,255,255,0.5)';
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
+    }
 
     // K. MAIN GAME LOOP
     let lastTime = 0, accumulator = 0;
@@ -575,58 +658,39 @@ window.addEventListener('load', () => {
     const screenElement = document.getElementById("screen");
     const fullscreenBtn = document.getElementById("fullscreen-btn");
 
-
-
-
-
-
-// --- JS Update: Replace the existing scaleGame function ---
-function scaleGame() {
-    const baseWidth = 960;
-    const baseHeight = 540;
-    
-    // Detect native fullscreen state
-    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    
-    if (isFullscreen) {
-        document.body.classList.add('is-fullscreen');
-        // Reset manual scaling for edge-to-edge
-        screenElement.style.width = '100vw';
-        screenElement.style.height = '100vh';
-        screenElement.style.transform = 'none';
-    } else {
-        document.body.classList.remove('is-fullscreen');
-        // Maintain 16:9 locked box for windowed mode
-        screenElement.style.width = baseWidth + 'px';
-        screenElement.style.height = baseHeight + 'px';
+    function scaleGame() {
+        const baseWidth = 960;
+        const baseHeight = 540;
         
-        const scale = Math.min(
-            window.innerWidth / baseWidth,
-            window.innerHeight / baseHeight
-        );
-        screenElement.style.transform = `scale(${scale})`;
+        // Detect native fullscreen state
+        const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        
+        if (isFullscreen) {
+            document.body.classList.add('is-fullscreen');
+            // Reset manual scaling for edge-to-edge
+            screenElement.style.width = '100vw';
+            screenElement.style.height = '100vh';
+            screenElement.style.transform = 'none';
+        } else {
+            document.body.classList.remove('is-fullscreen');
+            // Maintain 16:9 locked box for windowed mode
+            screenElement.style.width = baseWidth + 'px';
+            screenElement.style.height = baseHeight + 'px';
+            
+            const scale = Math.min(
+                window.innerWidth / baseWidth,
+                window.innerHeight / baseHeight
+            );
+            screenElement.style.transform = `scale(${scale})`;
+        }
+
+        // Always ensure canvas resolution matches the element size
+        resizeCanvas();
+        
+        // Prevent body scrolling
+        document.body.style.overflow = 'hidden';
+        document.body.style.touchAction = 'none';
     }
-
-    // Always ensure canvas resolution matches the element size
-    resizeCanvas();
-    
-    // Prevent body scrolling
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     function goFull() {
         const el = document.documentElement;
