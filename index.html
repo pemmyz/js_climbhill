@@ -9,8 +9,9 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- TOGGLE BUTTON -->
+    <!-- TOGGLE BUTTONS -->
     <button id="fullscreen-btn">📱 Fullscreen</button>
+    <button id="options-toggle-btn">⚙ Options</button>
 
     <!-- GAME CONTAINER (Wraps the content to be scaled) -->
     <div id="game-container">
@@ -72,6 +73,22 @@
         <hr>
         <p>Link to repo: <a href="https://github.com/pemmyz/js_climbhill" target="_blank" rel="noopener noreferrer">https://github.com/pemmyz/js_climbhill</a></p>
         <button id="close-help-btn">Close</button>
+    </div>
+
+    <!-- OPTIONS PANEL -->
+    <div id="options-panel" class="overlay-panel hidden">
+        <h2>⚙ Options</h2>
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin-bottom: 15px; font-size: 1.2em; cursor: pointer;">
+                <input type="checkbox" id="opt-rotate-world" style="transform: scale(1.5); margin-right: 10px;">
+                Keep Car Upright (Rotate World)
+            </label>
+            <label style="display: block; margin-bottom: 15px; font-size: 1.2em; cursor: pointer;">
+                <input type="checkbox" id="opt-gyro" style="transform: scale(1.5); margin-right: 10px;">
+                Enable Gyro Controls (Tilt to Rotate)
+            </label>
+        </div>
+        <button id="close-options-btn">Close</button>
     </div>
     
     <!-- MOBILE TOUCH CONTROLS OVERLAY -->

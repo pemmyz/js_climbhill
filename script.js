@@ -52,7 +52,16 @@ window.addEventListener('load', () => {
     const ctx = canvas.getContext('2d');
     let world, vehicle, terrainManager, camera, manualResetBtn;
     let particles = [];
-    let gameState = { paused: false, debug: false, gameOver: false, distance: 0, fuel: GAME_PARAMS.FUEL_START, lastCheckpoint: null, };
+    let gameState = { 
+        paused: false, 
+        debug: false, 
+        gameOver: false, 
+        distance: 0, 
+        fuel: GAME_PARAMS.FUEL_START, 
+        lastCheckpoint: null,
+        useGyro: false,
+        rotateWorld: false
+    };
     const pl = planck, Vec2 = pl.Vec2;
 
     function initWorld() {
@@ -138,7 +147,7 @@ window.addEventListener('load', () => {
 
     // D. INPUT MANAGER
     const input = {
-        throttle: 0, brake: 0, pitch: 0, keys: new Set(),
+        throttle: 0, brake: 0, pitch: 0, keys: new Set(), gyroPitch: 0,
         touchState: { throttle: 0, brake: 0, fwd: 0, bwd: 0 },
         
         init() {
@@ -221,6 +230,57 @@ window.addEventListener('load', () => {
             setupMobileBtn('brake-btn', 'brake'); 
             setupMobileBtn('tilt-forward-btn', 'fwd'); 
             setupMobileBtn('tilt-backward-btn', 'bwd');
+
+            // --- Options & Gyroscope Logic ---
+            const optionsPanel = document.getElementById('options-panel');
+            const optionsToggleBtn = document.getElementById('options-toggle-btn');
+            const closeOptionsBtn = document.getElementById('close-options-btn');
+            const optGyro = document.getElementById('opt-gyro');
+            const optRotateWorld = document.getElementById('opt-rotate-world');
+
+            const toggleOptions = () => optionsPanel.classList.toggle('hidden');
+            if (optionsToggleBtn) optionsToggleBtn.addEventListener('click', toggleOptions);
+            if (closeOptionsBtn) closeOptionsBtn.addEventListener('click', toggleOptions);
+
+            if (optRotateWorld) {
+                optRotateWorld.addEventListener('change', (e) => {
+                    gameState.rotateWorld = e.target.checked;
+                });
+            }
+
+            if (optGyro) {
+                optGyro.addEventListener('change', (e) => {
+                    gameState.useGyro = e.target.checked;
+                    // Request required permissions for iOS 13+ devices
+                    if (gameState.useGyro && typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        DeviceOrientationEvent.requestPermission().then(response => {
+                            if (response !== 'granted') {
+                                gameState.useGyro = false;
+                                optGyro.checked = false;
+                                alert("Gyroscope permission denied.");
+                            }
+                        }).catch(console.error);
+                    }
+                });
+            }
+
+            window.addEventListener('deviceorientation', (e) => {
+                if (!gameState.useGyro) return;
+                
+                // Account for standard Portrait and Landscape orientation handling
+                let angle = window.screen && window.screen.orientation ? window.screen.orientation.angle : window.orientation || 0;
+                let tilt = 0;
+                
+                if (angle === 90) tilt = e.beta;
+                else if (angle === -90 || angle === 270) tilt = -e.beta;
+                else tilt = e.gamma; // Portrait mode
+                
+                if (tilt === null || tilt === undefined) return;
+                
+                // Map a 5° deadzone, maxing out at 30° tilt (25° delta)
+                let normalized = Math.sign(tilt) * Math.max(0, (Math.abs(tilt) - 5) / 25);
+                this.gyroPitch = clamp(normalized, -1, 1);
+            });
         },
         
         update() { 
@@ -232,11 +292,16 @@ window.addEventListener('load', () => {
             let l = Math.max((this.keys.has('ArrowLeft') || this.keys.has('KeyA')) ? 1 : 0, this.touchState.bwd);
             this.pitch = r - l;
 
+            // Merge Gyroscope Pitch if enabled
+            if (gameState.useGyro) {
+                this.pitch = clamp(this.pitch + this.gyroPitch, -1, 1);
+            }
+
             const gp = navigator.getGamepads ? navigator.getGamepads()[0] : null; 
             if (gp) { 
                 this.throttle = Math.max(this.throttle, gp.buttons[7].value); 
                 this.brake = Math.max(this.brake, gp.buttons[6].value); 
-                if (Math.abs(gp.axes[0]) > 0.15) this.pitch = gp.axes[0]; 
+                if (Math.abs(gp.axes[0]) > 0.15) this.pitch = clamp(this.pitch + gp.axes[0], -1, 1); 
                 if (gp.buttons[9].pressed) gameState.paused = !gameState.paused; 
             } 
         },
@@ -514,6 +579,15 @@ window.addEventListener('load', () => {
         const fovScale = ch / 540;
         ctx.scale(PPM * camera.zoom * fovScale, -PPM * camera.zoom * fovScale);
         ctx.translate(-camera.x, -camera.y);
+        
+        // Fixed Camera Rotation logic (Keep Car Upright)
+        if (gameState.rotateWorld && vehicle && vehicle.chassis) {
+            const carPos = vehicle.chassis.getPosition();
+            // Translate exactly to the car's position, rotate the context backward, translate back
+            ctx.translate(carPos.x, carPos.y);
+            ctx.rotate(-vehicle.chassis.getAngle());
+            ctx.translate(-carPos.x, -carPos.y);
+        }
         
         for (let body = world.getBodyList(); body; body = body.getNext()) {
             const pos = body.getPosition();
