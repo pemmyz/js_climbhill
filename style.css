@@ -219,3 +219,58 @@ body.is-fullscreen #game-container {
     width: 100vw;
     height: 100vh;
 }
+
+/* --- GYRO UI (Top Left) --- */
+#gyro-ui-container {
+    position: fixed;
+    top: 50px; /* Below the fullscreen/options buttons */
+    left: 10px;
+    z-index: 2000;
+    display: none; /* Hidden by default, JS turns it on when Gyro is active */
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+}
+
+#gyro-circle {
+    width: 50px;
+    height: 50px;
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    position: relative;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+#gyro-pointer {
+    width: 4px;
+    height: 50%;
+    background: #e74c3c;
+    position: absolute;
+    left: 23px; /* Center of the 50px circle (50/2 - 4/2) */
+    top: 0;
+    transform-origin: bottom center;
+    border-radius: 2px;
+}
+
+#gyro-meter-container {
+    width: 80px;
+    height: 12px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 6px;
+    position: relative;
+    overflow: hidden;
+}
+
+#gyro-meter-fill {
+    width: 6px;
+    height: 12px;
+    background: #2ecc71;
+    position: absolute;
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
+    box-shadow: 0 0 5px #2ecc71;
+    transition: left 0.05s ease-out;
+}

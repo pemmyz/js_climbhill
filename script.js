@@ -60,7 +60,10 @@ window.addEventListener('load', () => {
         fuel: GAME_PARAMS.FUEL_START, 
         lastCheckpoint: null,
         useGyro: false,
-        rotateWorld: false
+        rotateWorld: false,
+        gyroSensitivity: 1.0,
+        gyroAggressivity: 2.0,
+        rawGyroTilt: 0 // Used for the UI rendering
     };
     const pl = planck, Vec2 = pl.Vec2;
 
@@ -237,6 +240,10 @@ window.addEventListener('load', () => {
             const closeOptionsBtn = document.getElementById('close-options-btn');
             const optGyro = document.getElementById('opt-gyro');
             const optRotateWorld = document.getElementById('opt-rotate-world');
+            const optGyroSens = document.getElementById('opt-gyro-sens');
+            const optGyroSensVal = document.getElementById('gyro-sens-val');
+            const optGyroAgg = document.getElementById('opt-gyro-agg');
+            const optGyroAggVal = document.getElementById('gyro-agg-val');
 
             const toggleOptions = () => optionsPanel.classList.toggle('hidden');
             if (optionsToggleBtn) optionsToggleBtn.addEventListener('click', toggleOptions);
@@ -264,10 +271,23 @@ window.addEventListener('load', () => {
                 });
             }
 
+            if (optGyroSens) {
+                optGyroSens.addEventListener('input', (e) => {
+                    gameState.gyroSensitivity = parseFloat(e.target.value);
+                    optGyroSensVal.textContent = gameState.gyroSensitivity.toFixed(1);
+                });
+            }
+
+            if (optGyroAgg) {
+                optGyroAgg.addEventListener('input', (e) => {
+                    gameState.gyroAggressivity = parseFloat(e.target.value);
+                    optGyroAggVal.textContent = gameState.gyroAggressivity.toFixed(1);
+                });
+            }
+
             window.addEventListener('deviceorientation', (e) => {
                 if (!gameState.useGyro) return;
                 
-                // Account for standard Portrait and Landscape orientation handling
                 let angle = window.screen && window.screen.orientation ? window.screen.orientation.angle : window.orientation || 0;
                 let tilt = 0;
                 
@@ -277,9 +297,29 @@ window.addEventListener('load', () => {
                 
                 if (tilt === null || tilt === undefined) return;
                 
-                // Map a 5° deadzone, maxing out at 30° tilt (25° delta)
-                let normalized = Math.sign(tilt) * Math.max(0, (Math.abs(tilt) - 5) / 25);
-                this.gyroPitch = clamp(normalized, -1, 1);
+                gameState.rawGyroTilt = tilt; // Store raw value for the HUD circle
+                
+                let mag = Math.abs(tilt);
+                let sign = Math.sign(tilt);
+                
+                // 1. Deadzone: 5 degrees
+                if (mag < 5) {
+                    mag = 0;
+                } else {
+                    mag -= 5;
+                }
+                
+                // 2. Normalize: max out at 30° tilt (25° delta after deadzone)
+                let normalized = Math.min(mag / 25, 1.0);
+                
+                // 3. Apply Aggressivity Curve (Non-linear/Exponential)
+                // Values > 1 create a curve where small tilts do very little, but heavy tilts ramp up fast
+                normalized = Math.pow(normalized, gameState.gyroAggressivity);
+                
+                // 4. Apply Sensitivity Multiplier
+                normalized *= gameState.gyroSensitivity;
+                
+                this.gyroPitch = clamp(sign * normalized, -1, 1);
             });
         },
         
@@ -552,6 +592,22 @@ window.addEventListener('load', () => {
                 this.element.style.backgroundColor = 'rgba(80, 20, 20, 0.7)';
             } else {
                 this.element.style.backgroundColor = '';
+            }
+
+            // Update Gyro UI Elements
+            const gyroContainer = document.getElementById('gyro-ui-container');
+            if (gameState.useGyro) {
+                gyroContainer.style.display = 'flex';
+                // Rotate the top-left circle pointer (clamp visually to -90 to 90 degrees)
+                const visualTilt = clamp(gameState.rawGyroTilt, -90, 90);
+                document.getElementById('gyro-pointer').style.transform = `rotate(${visualTilt}deg)`;
+                
+                // Slide the meter box left or right based on final computed input.pitch
+                // input.gyroPitch ranges -1 to 1. Map to 0% to 100%.
+                const meterPercent = 50 + (input.gyroPitch * 50);
+                document.getElementById('gyro-meter-fill').style.left = `${meterPercent}%`;
+            } else {
+                gyroContainer.style.display = 'none';
             }
         }
     };
