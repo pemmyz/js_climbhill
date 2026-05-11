@@ -381,7 +381,8 @@ window.addEventListener('load', () => {
         return {
             init() { this.lastCheckpointX = 0; this.lastFuelX = 0; generateSegment(-TERRAIN_PARAMS.SEGMENT_LENGTH); generateSegment(0); },
             update(cameraX) { if (cameraX > lastGeneratedX - TERRAIN_PARAMS.GENERATION_THRESHOLD) generateSegment(lastGeneratedX); if (bodies.length > 0 && cameraX > bodies[0].endX + TERRAIN_PARAMS.CULLING_THRESHOLD) { world.destroyBody(bodies[0].body); bodies.shift(); } },
-            getSlope(x) { let normal = Vec2(0, 1); world.rayCast(Vec2(x, 50), Vec2(x, -50), (fixture, point, n) => { const userData = fixture.getUserData(); if (userData && userData.type === 'ground') { normal = n; return 0; } return -1; }); return -normal.x / normal.y; }
+            getSlope(x) { let normal = Vec2(0, 1); world.rayCast(Vec2(x, 50), Vec2(x, -50), (fixture, point, n) => { const userData = fixture.getUserData(); if (userData && userData.type === 'ground') { normal = n; return 0; } return -1; }); return -normal.x / normal.y; },
+            getHeight(x) { return getHeight(x); }
         };
     }
     function createCollectible(pos, type) { const body = world.createBody({ type: 'static', position: pos }); body.createFixture(pl.Box(0.5, 0.5), { isSensor: true, userData: { type: type } }); body.renderData = { type }; }
@@ -454,6 +455,7 @@ window.addEventListener('load', () => {
             chassisGroundedCount: 0, // Upside down tracking
             upsideDownTimer: 0,      // Timer
             totalAppliedTorque: 0,
+            timeInAir: 0,
 
             get isRearGrounded()  { return this.groundContactCount.rear  > 0; },
             get isFrontGrounded() { return this.groundContactCount.front > 0; },
@@ -778,7 +780,39 @@ window.addEventListener('load', () => {
         
         camera.update(dt, vehicle.chassis);
         terrainManager.update(camera.x);
-        if (vehicle.chassis.getPosition().y < -50) input.handleReset();
+        
+        // Track continuous air time across resets
+        if (vehicle.isRearGrounded || vehicle.isFrontGrounded || vehicle.isChassisGrounded) {
+            vehicle.timeInAir = 0;
+        } else {
+            vehicle.timeInAir += dt;
+        }
+
+        // Out-of-bounds check with 4-second continuous fall rescue
+        if (vehicle.chassis.getPosition().y < -50) {
+            if (vehicle.timeInAir >= 4.0) {
+                // Determine horizontal target and surface elevation
+                let targetX = gameState.lastCheckpoint ? gameState.lastCheckpoint.pos.x : 4;
+                // If a checkpoint exists, ground is exactly 1.5m below it. Otherwise calculate procedurally.
+                let groundY = gameState.lastCheckpoint ? (gameState.lastCheckpoint.pos.y - 1.5) : terrainManager.getHeight(targetX);
+                
+                // Calculate same visual drop height as `performFlip()`
+                const ch = canvas.clientHeight;
+                const fovScale = ch / 540;
+                const screenTopY = groundY + (ch / 2) / (PPM * camera.zoom * fovScale);
+                const dropY = screenTopY + 1.35; 
+                
+                vehicle.reset(Vec2(targetX, dropY), 0, Vec2.zero(), 0);
+                gameState.fuel = gameState.lastCheckpoint ? Math.max(25, gameState.fuel) : GAME_PARAMS.FUEL_START;
+                vehicle.timeInAir = 0; // successfully rescued
+                
+                gameState.gameOver = false;
+                document.getElementById('game-over-panel').classList.add('hidden');
+            } else {
+                // Normal reset routine
+                input.handleReset();
+            }
+        }
         
         render();
         hud.update();
