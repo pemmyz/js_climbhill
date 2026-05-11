@@ -348,9 +348,13 @@ window.addEventListener('load', () => {
         
         handleReset() {
             if (gameState.lastCheckpoint) {
-                const checkpointPos = gameState.lastCheckpoint.pos;
-                const yOffset = 5 * VEHICLE_PARAMS.WHEEL_RADIUS; // 5 wheel heights
-                const spawnPos = Vec2(checkpointPos.x, checkpointPos.y + yOffset);
+                const targetX = gameState.lastCheckpoint.pos.x;
+                // Force the Y coordinate to be exactly calculated from the mathematical terrain
+                // This prevents spawning underground if the old checkpoint Y was somehow trapped
+                const trueGroundY = terrainManager.getHeight(targetX);
+                const safeYOffset = 3.0; // spawn securely 3 meters above the line
+                
+                const spawnPos = Vec2(targetX, trueGroundY + safeYOffset);
                 vehicle.reset(spawnPos, 0, Vec2.zero(), 0);
                 gameState.fuel = Math.max(25, gameState.fuel);
             } else {
@@ -788,28 +792,25 @@ window.addEventListener('load', () => {
             vehicle.timeInAir += dt;
         }
 
-        // Out-of-bounds check with 4-second continuous fall rescue
-        if (vehicle.chassis.getPosition().y < -50) {
+        // Checks if car is completely falling out of bounds OR has been stuck in a loop for 5s
+        const isOOB = vehicle.chassis.getPosition().y < -50;
+        const isEndlessFall = vehicle.timeInAir >= 5.0;
+
+        if (isOOB || isEndlessFall) {
             if (vehicle.timeInAir >= 4.0) {
-                // Determine horizontal target and surface elevation
+                // HARD RESCUE: Mathematically force spawn cleanly above true terrain curve
                 let targetX = gameState.lastCheckpoint ? gameState.lastCheckpoint.pos.x : 4;
-                // If a checkpoint exists, ground is exactly 1.5m below it. Otherwise calculate procedurally.
-                let groundY = gameState.lastCheckpoint ? (gameState.lastCheckpoint.pos.y - 1.5) : terrainManager.getHeight(targetX);
+                let trueGroundY = terrainManager.getHeight(targetX);
                 
-                // Calculate same visual drop height as `performFlip()`
-                const ch = canvas.clientHeight;
-                const fovScale = ch / 540;
-                const screenTopY = groundY + (ch / 2) / (PPM * camera.zoom * fovScale);
-                const dropY = screenTopY + 1.35; 
-                
-                vehicle.reset(Vec2(targetX, dropY), 0, Vec2.zero(), 0);
+                // Ensure it spawns a completely safe 5 meters above the surface line
+                vehicle.reset(Vec2(targetX, trueGroundY + 5), 0, Vec2.zero(), 0);
                 gameState.fuel = gameState.lastCheckpoint ? Math.max(25, gameState.fuel) : GAME_PARAMS.FUEL_START;
-                vehicle.timeInAir = 0; // successfully rescued
+                vehicle.timeInAir = 0; // Escape the loop condition
                 
                 gameState.gameOver = false;
                 document.getElementById('game-over-panel').classList.add('hidden');
-            } else {
-                // Normal reset routine
+            } else if (isOOB) {
+                // Quick reset for a normal fast out-of-bounds drop
                 input.handleReset();
             }
         }
